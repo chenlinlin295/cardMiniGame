@@ -1,6 +1,6 @@
 import {
   COLUMN_COUNT,
-  DEFAULT_SUIT_WEIGHTS,
+  SUIT_COUNT,
   Suit,
   TOTAL_CARDS,
   type Card,
@@ -62,6 +62,31 @@ export function buildWeightedDeck(weights: number[], luckySuit: Suit, rng: Seede
   return rng.shuffle(deck);
 }
 
+/** 生成3张技能牌，其余97张普通牌均分到10种花色 */
+export function buildDeckWithLucky3(_luckySuit: Suit, rng: SeededRandom): Card[] {
+  resetCardIdCounter();
+  const deck: Card[] = [];
+  const SKILL_CARD_COUNT = 3;
+  const NORMAL_COUNT = TOTAL_CARDS - SKILL_CARD_COUNT;
+  const PER_SUIT = Math.floor(NORMAL_COUNT / SUIT_COUNT);
+  const EXTRA = NORMAL_COUNT % SUIT_COUNT;
+
+  for (let suit = 0; suit < SUIT_COUNT; suit++) {
+    const count = PER_SUIT + (suit < EXTRA ? 1 : 0);
+    for (let i = 0; i < count; i++) {
+      deck.push(createCard(suit as Suit, false));
+    }
+  }
+
+  // 添加3张技能牌（随机花色）
+  for (let i = 0; i < SKILL_CARD_COUNT; i++) {
+    const randomSuit = rng.nextInt(0, SUIT_COUNT - 1) as Suit;
+    deck.push(createCard(randomSuit, true));
+  }
+
+  return rng.shuffle(deck);
+}
+
 /** 将牌组平均分成 6 列（100 张 → 17/17/17/17/16/16） */
 export function splitIntoColumns(deck: Card[], _rng?: SeededRandom, _options?: GeneratorOptions): Card[][] {
   const columns: Card[][] = Array.from({ length: COLUMN_COUNT }, () => []);
@@ -78,91 +103,80 @@ export function splitIntoColumns(deck: Card[], _rng?: SeededRandom, _options?: G
   return columns;
 }
 
-/** 逆向构造可解关卡：保证每种花色可三消完（含余牌+万能牌） */
+/** 逆向构造可解关卡：3张技能牌，其余均分 */
 export function generateSolvableLevel(config: LevelConfig, options: GeneratorOptions = {}): GeneratedLevel {
   const rng = new SeededRandom(config.seed);
-  const weights = adjustWeightsForDifficulty(DEFAULT_SUIT_WEIGHTS, config.difficulty);
   const maxAttempts = options.maxAttempts ?? 50;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const attemptRng = new SeededRandom(config.seed + attempt * 9973);
-    const deck = buildWeightedDeck(weights, config.luckySuit, attemptRng);
+    const deck = buildDeckWithLucky3(config.luckySuit, attemptRng);
     const columns = splitIntoColumns(deck, attemptRng, options);
 
-    if (verifyBasicSolvability(columns, config.luckySuit, weights)) {
+    if (verifyBasicSolvability(columns)) {
+      const weights = getLucky3Weights();
       return { columns, deck, suitWeights: weights, seed: config.seed + attempt * 9973 };
     }
   }
 
-  //  fallback: 使用构造法
+  // fallback: 使用构造法
+  const weights = getLucky3Weights();
   return generateConstructedLevel(config, weights, rng);
 }
 
-/** 基础可解性：万能牌数量 >= 余牌所需 */
-function verifyBasicSolvability(columns: Card[][], luckySuit: Suit, weights: number[]): boolean {
+/** 获取花色权重（3张技能牌，其余均分） */
+function getLucky3Weights(): number[] {
+  const NORMAL_COUNT = TOTAL_CARDS - 3;
+  const PER_SUIT = Math.floor(NORMAL_COUNT / SUIT_COUNT);
+  const EXTRA = NORMAL_COUNT % SUIT_COUNT;
+  return Array.from({ length: SUIT_COUNT }, (_, suit) =>
+    PER_SUIT + (suit < EXTRA ? 1 : 0),
+  );
+}
+
+/** 基础可解性检查 */
+function verifyBasicSolvability(columns: Card[][]): boolean {
   const allCards = columns.flat();
-  const wildCount = allCards.filter((c) => c.suit === luckySuit).length;
+  const skillCardCount = allCards.filter((c) => c.isSkillCard).length;
+  const suitCounts = new Array(SUIT_COUNT).fill(0);
+  allCards.forEach((c) => {
+    if (!c.isSkillCard || c.skillConsumed) {
+      suitCounts[c.suit]++;
+    }
+  });
 
   let remainderNeeds = 0;
-  for (let s = 0; s < weights.length; s++) {
-    const rem = weights[s] % 3;
+  for (let s = 0; s < SUIT_COUNT; s++) {
+    const rem = suitCounts[s] % 3;
     if (rem > 0) remainderNeeds += rem;
   }
 
-  // 幸运花色的牌本身也是万能牌，其余牌若有余数需要其他万能补齐
-  const luckyRemainder = weights[luckySuit] % 3;
-  const otherRemainder = remainderNeeds - luckyRemainder;
-
-  // 每个万能牌最多补2张余牌缺口
-  return wildCount * 2 >= Math.max(0, otherRemainder);
+  return skillCardCount * 2 >= remainderNeeds;
 }
 
-/** 逆向构造法：按三消组拆入各列 */
+/** 逆向构造法 fallback：直接洗牌均分（保证100张） */
 function generateConstructedLevel(
   config: LevelConfig,
   weights: number[],
   rng: SeededRandom,
 ): GeneratedLevel {
   resetCardIdCounter();
-  const columns: Card[][] = Array.from({ length: COLUMN_COUNT }, () => []);
-  const groups: Card[][] = [];
-
+  const deck: Card[] = [];
   for (let suit = 0; suit < weights.length; suit++) {
-    const s = suit as Suit;
-    const count = weights[suit];
-
-    for (let i = 0; i < count; i += 3) {
-      const groupSize = Math.min(3, count - i);
-      const group: Card[] = [];
-      for (let j = 0; j < groupSize; j++) {
-        group.push(createCard(s, false));
-      }
-      groups.push(group);
+    for (let i = 0; i < weights[suit]; i++) {
+      deck.push(createCard(suit as Suit, false));
     }
   }
-
-  const shuffledGroups = rng.shuffle(groups);
-  shuffledGroups.forEach((group, i) => {
-    const colIdx = i % COLUMN_COUNT;
-    columns[colIdx].push(...group.reverse());
-  });
-
-  // 列内洗牌
-  columns.forEach((col, i) => {
-    if (col.length > 1 && i % 2 === 0) {
-      const top = col.pop()!;
-      const shuffled = rng.shuffle(col);
-      col.length = 0;
-      col.push(...shuffled, top);
-    }
-  });
-
-  // 重新平均分配到 6 列，保证列高一致
-  const shuffledDeck = rng.shuffle(columns.flat());
-  const evenColumns = splitIntoColumns(shuffledDeck);
-
-  const deck = shuffledDeck;
-  return { columns: evenColumns, deck, suitWeights: weights, seed: config.seed };
+  
+  // 添加3张技能牌（随机花色）
+  for (let i = 0; i < 3; i++) {
+    const randomSuit = rng.nextInt(0, SUIT_COUNT - 1) as Suit;
+    deck.push(createCard(randomSuit, true));
+  }
+  
+  const shuffledDeck = rng.shuffle(deck);
+  const columns = splitIntoColumns(shuffledDeck);
+  return { columns, deck: shuffledDeck, suitWeights: weights, seed: config.seed };
 }
 
 export function createLevelConfig(

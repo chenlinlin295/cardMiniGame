@@ -14,7 +14,7 @@ export enum Suit {
 
 export const SUIT_COUNT = 10;
 export const TOTAL_CARDS = 100;
-export const COLUMN_COUNT = 6;
+export const COLUMN_COUNT = 8;
 export const SLOT_COUNT = 7;
 export const HOLD_COUNT = 3;
 export const PEEK_DEPTH = 2;
@@ -70,8 +70,8 @@ export type GameStatus = 'playing' | 'won' | 'lost' | 'paused';
 export interface Card {
   id: string;
   suit: Suit;
-  /** 幸运万能牌 */
-  isWild: boolean;
+  /** 是否为技能牌 */
+  isSkillCard: boolean;
   /** 技能已消耗，变为普通牌 */
   skillConsumed: boolean;
 }
@@ -122,7 +122,6 @@ export interface GameStateData {
 export interface MatchResult {
   eliminated: Card[];
   matchedSuit: Suit;
-  wildUsed: boolean;
 }
 
 export interface ReviveResult {

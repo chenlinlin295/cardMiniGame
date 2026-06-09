@@ -156,30 +156,49 @@ function renderGame() {
     );
 
     col.forEach((card, layer) => {
-      const isTop = layer === col.length - 1;
+      const isBottom = layer === 0;
       const isPeek = peekIds.has(card.id);
-      const showFace = isTop || isPeek;
-      const extraClass = isPeek && !isTop ? 'peek-preview' : '';
+      const showFace = isBottom || isPeek;
+      const extraClass = isPeek && !isBottom ? 'peek-preview' : '';
 
       const el = createCardEl(
         card,
         showFace,
         extraClass,
-        isTop && card.isWild && !card.skillConsumed,
-        isTop && controller.isLuckyCard(card),
+        isBottom && card.isSkillCard && !card.skillConsumed,
+        isBottom && controller.isSkillCard(card),
       );
 
       if (!showFace) el.classList.add('back');
 
-      el.style.bottom = `${layer * CARD_STEP}px`;
-      el.style.zIndex = String(layer);
+      // 从下往上拿：底部牌（index 0）最先拿，放在视觉最顶层
+      // 底部牌：bottom 值最高，z-index 最高 → 可见且可点击
+      const displayDepth = col.length - 1 - layer;
+      el.style.bottom = `${displayDepth * CARD_STEP}px`;
+      el.style.zIndex = String(displayDepth);
 
-      if (isTop) {
+      if (isBottom) {
         el.classList.add('clickable');
-        el.onclick = () => {
-          controller.pickColumn(colIdx);
-          renderGame();
-        };
+        const isSkillCard = controller.isSkillCard(card);
+        if (isSkillCard) {
+          el.onclick = () => {
+            const state = controller.game.getState();
+            if (state.slots.length < controller.game.getEffectiveMaxSlots()) {
+              controller.pickColumn(colIdx);
+              const newState = controller.game.getState();
+              const skillIdx = newState.slots.findIndex(c => c.id === card.id);
+              if (skillIdx >= 0) {
+                renderGame();
+                setTimeout(() => openLuckyModal(skillIdx), 100);
+              }
+            }
+          };
+        } else {
+          el.onclick = () => {
+            controller.pickColumn(colIdx);
+            renderGame();
+          };
+        }
       }
 
       colEl.appendChild(el);
@@ -212,9 +231,9 @@ function renderGame() {
   slotsEl.innerHTML = '';
   slotsEl.classList.toggle('full', state.slots.length >= maxSlots);
   state.slots.forEach((card, idx) => {
-    const isLucky = controller.isLuckyCard(card);
-    const el = createCardEl(card, true, '', card.isWild && !card.skillConsumed, isLucky);
-    if (isLucky) {
+    const isSkill = controller.isSkillCard(card);
+    const el = createCardEl(card, true, '', card.isSkillCard && !card.skillConsumed, isSkill);
+    if (isSkill) {
       el.classList.add('clickable');
       el.onclick = () => openLuckyModal(idx);
     }
@@ -231,7 +250,9 @@ function renderGame() {
 
 function createCardEl(card, showFace, extraClass = '', isWild = false, isLucky = false) {
   const el = document.createElement('div');
-  el.className = `card ${extraClass} ${isWild ? 'wild' : ''} ${isLucky ? 'lucky' : ''}`.trim();
+  // 如果是技能牌（且未消耗），强制添加 wild 类
+  const isSkill = card.isSkillCard && !card.skillConsumed;
+  el.className = `card ${extraClass} ${isWild || isSkill ? 'wild' : ''} ${isLucky ? 'lucky' : ''}`.trim();
   el.textContent = showFace ? SUIT_EMOJIS[card.suit] : '';
   return el;
 }
@@ -243,37 +264,9 @@ function openLuckyModal(slotIndex) {
   wildList.innerHTML = '';
   skillList.innerHTML = '';
 
-  const options = controller.getManualWildOptions(slotIndex);
-  if (options.length > 0) {
-    const title = document.createElement('p');
-    title.className = 'hint';
-    title.textContent = '用作万能牌消除：';
-    wildList.appendChild(title);
-
-    options.forEach((suit) => {
-      const item = document.createElement('div');
-      item.className = 'skill-item';
-      item.innerHTML = `
-        <span class="icon">${SUIT_EMOJIS[suit]}</span>
-        <div class="info">
-          <div class="name">消除 ${SUIT_NAMES[suit]}</div>
-          <div class="desc">手动激活万能牌，凑齐3张${SUIT_NAMES[suit]}</div>
-        </div>
-      `;
-      item.onclick = () => {
-        controller.activateManualWild(slotIndex, suit);
-        hideModal('lucky');
-        renderGame();
-      };
-      wildList.appendChild(item);
-    });
-  } else {
-    wildList.innerHTML = '<p class="hint">槽内暂无可用万能消除组合（需同花色至少2张）</p>';
-  }
-
   const skillTitle = document.createElement('p');
   skillTitle.className = 'hint';
-  skillTitle.textContent = '或释放技能：';
+  skillTitle.textContent = '释放技能（使用后技能牌变为普通牌）：';
   skillList.appendChild(skillTitle);
 
   Object.values(SKILL_INFO).forEach((info) => {
@@ -291,7 +284,7 @@ function openLuckyModal(slotIndex) {
         hideModal('lucky');
         openTakeModal();
       } else {
-        controller.useWildSkill(slotIndex, info.type);
+        controller.useSkillCard(slotIndex, info.type);
         hideModal('lucky');
         renderGame();
       }
@@ -322,7 +315,7 @@ function openSkillModal(slotIndex) {
         hideModal('skill');
         openTakeModal();
       } else {
-        controller.useWildSkill(slotIndex, info.type);
+        controller.useSkillCard(slotIndex, info.type);
         hideModal('skill');
         renderGame();
       }
@@ -396,9 +389,17 @@ function initEvents() {
   $('#btn-take-cancel').onclick = () => hideModal('take');
   $('#btn-take-confirm').onclick = () => {
     if (takeSelectedIndices.length > 0) {
-      controller.takeToHold(takeSelectedIndices);
-      hideModal('take');
-      renderGame();
+      let ok = false;
+      if (wildSlotForSkill !== null && wildSlotForSkill !== undefined) {
+        ok = controller.takeToHoldWithSkillCard(wildSlotForSkill, takeSelectedIndices);
+        wildSlotForSkill = null;
+      } else {
+        ok = controller.takeToHold(takeSelectedIndices);
+      }
+      if (ok) {
+        hideModal('take');
+        renderGame();
+      }
     }
   };
 

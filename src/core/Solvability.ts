@@ -10,7 +10,7 @@ export interface SimState {
   maxSlots: number;
 }
 
-/** 贪心模拟：随机取列顶牌，检查是否存在通关路径（启发式） */
+/** 贪心模拟：随机取列底牌，检查是否存在通关路径（启发式） */
 export function simulateGreedy(state: SimState, rng: SeededRandom, maxSteps = 200): boolean {
   const columns = state.columns.map((c) => [...c]);
   const slots: Card[] = [];
@@ -26,7 +26,7 @@ export function simulateGreedy(state: SimState, rng: SeededRandom, maxSteps = 20
       return false;
     }
 
-    // 优先从列取牌
+    // 优先从列取牌（从下往上）
     const availableCols = columns.map((c, i) => i).filter((i) => columns[i].length > 0);
     if (availableCols.length === 0) {
       // 从待用区取回
@@ -40,7 +40,7 @@ export function simulateGreedy(state: SimState, rng: SeededRandom, maxSteps = 20
     }
 
     const colIdx = rng.pick(availableCols);
-    const card = columns[colIdx].pop()!;
+    const card = columns[colIdx].shift()!;
     slots.push(card);
     tryAutoMatch(slots);
   }
@@ -74,12 +74,12 @@ export function checkSolvabilityBFS(
     if (depth >= maxDepth) continue;
     if (isDefeat(state.slots, state.maxSlots)) continue;
 
-    // 从每列取牌
+    // 从每列取牌（从下往上）
     for (let col = 0; col < COLUMN_COUNT; col++) {
       if (state.columns[col].length === 0) continue;
       const next = cloneSimState(state);
-      const card = next.columns[col][next.columns[col].length - 1];
-      next.columns[col] = next.columns[col].slice(0, -1);
+      const card = next.columns[col][0];
+      next.columns[col] = next.columns[col].slice(1);
       next.slots = [...next.slots, card];
       tryAutoMatch(next.slots);
       if (!isDefeat(next.slots, next.maxSlots)) {
@@ -103,8 +103,8 @@ export function checkSolvabilityBFS(
 }
 
 function serializeState(state: SimState): string {
-  const colStr = state.columns.map((c) => c.map((card) => `${card.suit}${card.isWild ? 'w' : ''}`).join(',')).join('|');
-  const slotStr = state.slots.map((c) => `${c.suit}${c.isWild ? 'w' : ''}`).join(',');
+  const colStr = state.columns.map((c) => c.map((card) => `${card.suit}${card.isSkillCard ? 's' : ''}`).join(',')).join('|');
+  const slotStr = state.slots.map((c) => `${c.suit}${c.isSkillCard ? 's' : ''}`).join(',');
   const holdStr = state.holdArea.map((c) => `${c.suit}`).join(',');
   return `${colStr}#${slotStr}#${holdStr}`;
 }
@@ -124,8 +124,8 @@ export function estimateDifficulty(columns: Card[][], luckySuit: Suit): number {
   const wildCount = all.filter((c) => c.suit === luckySuit).length;
   const colHeights = columns.map((c) => c.length);
   const heightVariance = Math.max(...colHeights) - Math.min(...colHeights);
-  const topSuits = columns.filter((c) => c.length > 0).map((c) => c[c.length - 1].suit);
-  const topDiversity = new Set(topSuits).size;
+  const bottomSuits = columns.filter((c) => c.length > 0).map((c) => c[0].suit);
+  const bottomDiversity = new Set(bottomSuits).size;
 
-  return (heightVariance / 10) * 0.3 + (1 - wildCount / 12) * 0.4 + (1 - topDiversity / 6) * 0.3;
+  return (heightVariance / 10) * 0.3 + (1 - wildCount / 12) * 0.4 + (1 - bottomDiversity / COLUMN_COUNT) * 0.3;
 }

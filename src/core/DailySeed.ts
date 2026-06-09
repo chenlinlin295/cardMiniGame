@@ -20,10 +20,10 @@ export function getDailyLuckySuit(date: Date = new Date()): Suit {
   return rng.nextInt(0, 9) as Suit;
 }
 
-export function createDailyLevelConfig(date: Date = new Date()): LevelConfig {
+export function createDailyLevelConfig(date: Date = new Date(), luckySuit?: Suit): LevelConfig {
   return {
     seed: getDailySeed(date),
-    luckySuit: getDailyLuckySuit(date),
+    luckySuit: luckySuit ?? getDailyLuckySuit(date),
     mode: 'daily',
     level: 1,
     difficulty: 0.5,

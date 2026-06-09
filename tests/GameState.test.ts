@@ -24,8 +24,6 @@ describe('GameState', () => {
     const colIdx = game.getState().columns.findIndex((c) => c.length > 0);
     game.pickFromColumn(colIdx);
     const movesAfterPick = game.getState().moves;
-    game.activateWildSkill(0, SkillType.Undo);
-    // undo via applySkill if no wild - use applySkill directly
     game.applySkill(SkillType.Undo);
     expect(game.getState().moves).toBeLessThan(movesAfterPick);
   });

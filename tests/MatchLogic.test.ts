@@ -3,7 +3,6 @@ import {
   findMatchableSuit,
   eliminateMatch,
   tryAutoMatch,
-  manualWildMatch,
   isVictory,
   isDefeat,
 } from '../src/core/MatchLogic.js';
@@ -26,18 +25,22 @@ describe('MatchLogic', () => {
     expect(slots.length).toBe(0);
   });
 
-  it('万能牌：不自动三消，需手动激活', () => {
-    const wild = createCard(Suit.Cat, true);
-    const slots = [createCard(Suit.Dog), createCard(Suit.Dog), wild];
+  it('技能牌：不参与自动三消', () => {
+    const skillCard = createCard(Suit.Cat, true);
+    const slots = [createCard(Suit.Dog), createCard(Suit.Dog), skillCard];
     expect(findMatchableSuit(slots)).toBeNull();
     expect(tryAutoMatch(slots).length).toBe(0);
     expect(slots.length).toBe(3);
   });
 
-  it('手动万能：2张同花色+1万能', () => {
-    const slots = [createCard(Suit.Dog), createCard(Suit.Dog), createCard(Suit.Cat)];
-    const result = manualWildMatch(slots, 2, Suit.Dog, Suit.Cat);
-    expect(result).not.toBeNull();
+  it('技能牌消耗后参与三消', () => {
+    const skillCard = createCard(Suit.Cat, true);
+    skillCard.skillConsumed = true;
+    const slots = [skillCard, createCard(Suit.Cat), createCard(Suit.Cat)];
+    const suit = findMatchableSuit(slots);
+    expect(suit).toBe(Suit.Cat);
+    const result = eliminateMatch(slots, Suit.Cat);
+    expect(result?.eliminated.length).toBe(3);
     expect(slots.length).toBe(0);
   });
 
@@ -55,6 +58,6 @@ describe('MatchLogic', () => {
   });
 
   it('胜利：全空', () => {
-    expect(isVictory([[], [], [], [], [], []], [], [])).toBe(true);
+    expect(isVictory([[], [], [], [], [], [], [], []], [], [])).toBe(true);
   });
 });

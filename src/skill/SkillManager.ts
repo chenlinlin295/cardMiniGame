@@ -61,12 +61,16 @@ export class SkillManager {
     return uses < limits[skill];
   }
 
-  useFromWild(slotIndex: number, skill: SkillType): boolean {
-    return this.game.activateWildSkill(slotIndex, skill);
+  useFromSkillCard(slotIndex: number, skill: SkillType): boolean {
+    return this.game.activateSkillCard(slotIndex, skill);
   }
 
   takeToHold(slotIndices: number[]): boolean {
     return this.game.takeSlotsToHold(slotIndices);
+  }
+
+  takeToHoldWithSkillCard(skillCardIndex: number, slotIndices: number[]): boolean {
+    return this.game.takeToHoldWithSkillCard(skillCardIndex, slotIndices);
   }
 
   /** 激励视频奖励：额外一次撤销 */

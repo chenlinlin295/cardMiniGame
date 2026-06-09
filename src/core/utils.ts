@@ -81,11 +81,11 @@ export function resetCardIdCounter(): void {
   cardIdCounter = 0;
 }
 
-export function createCard(suit: import('./types.js').Suit, isWild = false): import('./types.js').Card {
+export function createCard(suit: import('./types.js').Suit, isSkillCard = false): import('./types.js').Card {
   return {
     id: `c_${++cardIdCounter}`,
     suit,
-    isWild,
+    isSkillCard,
     skillConsumed: false,
   };
 }

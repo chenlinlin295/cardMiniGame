@@ -44,7 +44,7 @@ export class GameController {
 
     const config =
       mode === 'daily'
-        ? createDailyLevelConfig()
+        ? createDailyLevelConfig(undefined, this.luckySuit)
         : createEndlessLevelConfig(level, this.luckySuit);
 
     this.game = new GameState(config);
@@ -74,24 +74,20 @@ export class GameController {
     return this.game.pickFromHold(index);
   }
 
-  useWildSkill(slotIndex: number, skill: import('../core/types.js').SkillType): boolean {
-    return this.skills.useFromWild(slotIndex, skill);
+  useSkillCard(slotIndex: number, skill: import('../core/types.js').SkillType): boolean {
+    return this.skills.useFromSkillCard(slotIndex, skill);
   }
 
-  activateManualWild(slotIndex: number, targetSuit: import('../core/types.js').Suit): boolean {
-    return this.game.activateManualWild(slotIndex, targetSuit);
-  }
-
-  getManualWildOptions(slotIndex: number): import('../core/types.js').Suit[] {
-    return this.game.getManualWildOptions(slotIndex);
-  }
-
-  isLuckyCard(card: import('../core/types.js').Card): boolean {
-    return this.game.isLuckyCard(card);
+  isSkillCard(card: import('../core/types.js').Card): boolean {
+    return this.game.isSkillCard(card);
   }
 
   takeToHold(indices: number[]): boolean {
     return this.skills.takeToHold(indices);
+  }
+
+  takeToHoldWithSkillCard(skillCardIndex: number, indices: number[]): boolean {
+    return this.skills.takeToHoldWithSkillCard(skillCardIndex, indices);
   }
 
   reviveWithVideo(): Promise<boolean> {

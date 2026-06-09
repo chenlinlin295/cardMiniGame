@@ -26,9 +26,6 @@ import {
   isDefeat,
   isVictory,
   tryAutoMatch,
-  manualWildMatch as doManualWildMatch,
-  getWildMatchOptions,
-  canActivateWild,
 } from './MatchLogic.js';
 import { generateSolvableLevel } from './LevelGenerator.js';
 
@@ -117,18 +114,19 @@ export class GameState {
     }
   }
 
-  /** 从列顶取牌 */
+  /** 从列底取牌（从下往上） */
   pickFromColumn(columnIndex: number): boolean {
     if (this.data.status !== 'playing') return false;
     const col = this.data.columns[columnIndex];
     if (!col || col.length === 0) return false;
 
     this.saveSnapshot();
-    const card = col.pop()!;
+    const card = col.shift()!;
 
     this.data.slots.push(card);
     this.data.moves++;
 
+    this.groupSlotsBySuit();
     const matches = tryAutoMatch(this.data.slots);
     this.checkExtraSlotExpiry();
 
@@ -151,6 +149,7 @@ export class GameState {
     this.data.slots.push(card);
     this.data.moves++;
 
+    this.groupSlotsBySuit();
     const matches = tryAutoMatch(this.data.slots);
     this.emit({ type: 'cardFromHold', card });
     if (matches.length > 0) {
@@ -158,6 +157,27 @@ export class GameState {
     }
 
     return this.checkEndState();
+  }
+
+  /** 将槽内同花色牌排列在一起 */
+  private groupSlotsBySuit(): void {
+    const slots = this.data.slots;
+    const specials: { card: Card; originalIdx: number }[] = [];
+    const normals: Card[] = [];
+
+    slots.forEach((card) => {
+      if (card.isSkillCard || card.skillConsumed) {
+        specials.push({ card, originalIdx: 0 });
+      } else {
+        normals.push(card);
+      }
+    });
+
+    normals.sort((a, b) => a.suit - b.suit);
+
+    const result: Card[] = [...normals];
+    specials.forEach(({ card }) => result.unshift(card));
+    this.data.slots = result;
   }
 
   /** 获取当前有效槽位数 */
@@ -178,8 +198,8 @@ export class GameState {
   getPeekCards(columnIndex: number): Card[] {
     const col = this.data.columns[columnIndex];
     if (!col) return [];
-    const start = Math.max(0, col.length - 1 - 2);
-    return col.slice(start, col.length - 1).reverse();
+    const end = Math.min(col.length, 3);
+    return col.slice(1, end);
   }
 
   private checkExtraSlotExpiry(): void {
@@ -206,34 +226,16 @@ export class GameState {
     return true;
   }
 
-  /** 手动激活万能牌并选择消除花色 */
-  activateManualWild(slotIndex: number, targetSuit: Suit): boolean {
-    if (this.data.status !== 'playing') return false;
-
-    this.saveSnapshot();
-    const result = doManualWildMatch(this.data.slots, slotIndex, targetSuit, this.data.luckySuit);
-    if (!result) return false;
-
-    this.data.moves++;
-    this.emit({ type: 'matched', results: [result] });
-    return this.checkEndState();
+  /** 是否为技能牌 */
+  isSkillCard(card: Card): boolean {
+    return card.isSkillCard && !card.skillConsumed;
   }
 
-  /** 获取某张幸运牌可手动消除的花色 */
-  getManualWildOptions(slotIndex: number): Suit[] {
-    return getWildMatchOptions(this.data.slots, slotIndex, this.data.luckySuit);
-  }
-
-  /** 是否为可手动激活的幸运牌 */
-  isLuckyCard(card: Card): boolean {
-    return canActivateWild(card, this.data.luckySuit);
-  }
-
-  /** 点击幸运牌释放技能 */
-  useSkillFromWild(slotIndex: number, skill: SkillType): boolean {
+  /** 点击技能牌释放技能 */
+  useSkillFromSkillCard(slotIndex: number, skill: SkillType): boolean {
     if (this.data.status !== 'playing') return false;
     const card = this.data.slots[slotIndex];
-    if (!this.isLuckyCard(card)) return false;
+    if (!this.isSkillCard(card)) return false;
 
     return this.applySkill(skill, slotIndex);
   }
@@ -259,7 +261,7 @@ export class GameState {
     }
   }
 
-  /** 从卡槽取牌到待用区 */
+  /** 从卡槽取牌到待用区（不能取技能牌） */
   takeSlotsToHold(slotIndices: number[]): boolean {
     if (this.data.status !== 'playing') return false;
     if (slotIndices.length === 0 || slotIndices.length > 3) return false;
@@ -268,6 +270,10 @@ export class GameState {
     const unique = [...new Set(slotIndices)].sort((a, b) => b - a);
     for (const idx of unique) {
       if (idx < 0 || idx >= this.data.slots.length) return false;
+      // 检查是否为技能牌（不能选取技能牌）
+      if (this.data.slots[idx].isSkillCard && !this.data.slots[idx].skillConsumed) {
+        return false;
+      }
     }
 
     this.saveSnapshot();
@@ -301,6 +307,7 @@ export class GameState {
 
     const colCount = this.data.columns.length;
     const newColumns: Card[][] = Array.from({ length: colCount }, () => []);
+    // 依次循环分发，保证每列从下往上堆叠（index 0 = 底部 = 最先可取）
     remaining.forEach((card, i) => {
       newColumns[i % colCount].push(card);
     });
@@ -319,16 +326,16 @@ export class GameState {
     return true;
   }
 
-  private extraSlot(wildSlotIndex?: number): boolean {
+  private extraSlot(skillSlotIndex?: number): boolean {
     this.data.maxSlots = SLOT_COUNT + 1;
     this.data.extraSlotUntil = Date.now() + EXTRA_SLOT_DURATION_MS;
     this.data.skillUses[SkillType.ExtraSlot]++;
 
-    if (wildSlotIndex !== undefined) {
-      const card = this.data.slots[wildSlotIndex];
-      if (card && this.isLuckyCard(card)) {
+    if (skillSlotIndex !== undefined) {
+      const card = this.data.slots[skillSlotIndex];
+      if (card && this.isSkillCard(card)) {
         card.skillConsumed = true;
-        card.isWild = false;
+        card.isSkillCard = false;
       }
     }
 
@@ -356,21 +363,59 @@ export class GameState {
     return true;
   }
 
-  /** 消耗幸运牌释放技能 */
-  activateWildSkill(slotIndex: number, skill: SkillType): boolean {
+  /** 消耗技能牌释放技能 */
+  activateSkillCard(slotIndex: number, skill: SkillType): boolean {
     if (this.data.status !== 'playing') return false;
     const card = this.data.slots[slotIndex];
-    if (!this.isLuckyCard(card)) return false;
-    if (this.data.luckySkillUses >= 3) return false;
+    if (!this.isSkillCard(card)) return false;
 
-    const ok = this.applySkillWithWildConsumption(skill, slotIndex);
-    if (ok) {
-      this.data.luckySkillUses++;
-    }
+    const ok = this.applySkillWithSkillConsumption(skill, slotIndex);
     return ok;
   }
 
-  private applySkillWithWildConsumption(skill: SkillType, slotIndex: number): boolean {
+  /** 通过技能牌释放"取牌"技能：消耗技能牌并将选中的卡槽牌移到待用区 */
+  takeToHoldWithSkillCard(skillCardIndex: number, slotIndices: number[]): boolean {
+    if (this.data.status !== 'playing') return false;
+    const skillCard = this.data.slots[skillCardIndex];
+    if (!this.isSkillCard(skillCard)) return false;
+
+    // 过滤掉被选中的卡槽牌中的技能牌索引
+    const filteredSlots = slotIndices.filter((idx) => {
+      if (idx === skillCardIndex) return false;
+      const card = this.data.slots[idx];
+      return !card || !this.isSkillCard(card);
+    });
+    if (filteredSlots.length === 0 || filteredSlots.length > 3) return false;
+
+    this.saveSnapshot();
+    const unique = [...new Set(filteredSlots)].sort((a, b) => b - a);
+
+    if (this.data.holdArea.length + unique.length > HOLD_COUNT) return false;
+
+    // 先移入选中的牌到待用区
+    const taken: Card[] = [];
+    for (const idx of unique) {
+      if (idx < 0 || idx >= this.data.slots.length) continue;
+      taken.unshift(this.data.slots.splice(idx, 1)[0]);
+    }
+    for (const card of taken) {
+      this.data.holdArea.push(card);
+      this.emit({ type: 'cardToHold', card });
+    }
+
+    // 消耗技能牌
+    const currentSlotIdx = this.data.slots.indexOf(skillCard);
+    if (currentSlotIdx >= 0) {
+      skillCard.isSkillCard = false;
+      skillCard.skillConsumed = true;
+    }
+
+    this.data.skillUses[SkillType.TakeToHold]++;
+    this.emit({ type: 'skillUsed', skill: SkillType.TakeToHold });
+    return true;
+  }
+
+  private applySkillWithSkillConsumption(skill: SkillType, slotIndex: number): boolean {
     if (skill === SkillType.TakeToHold) return false;
 
     const ok =
@@ -386,9 +431,9 @@ export class GameState {
 
     if (ok && skill !== SkillType.ExtraSlot) {
       const card = this.data.slots[slotIndex];
-      if (card && this.isLuckyCard(card)) {
+      if (card && this.isSkillCard(card)) {
         card.skillConsumed = true;
-        card.isWild = false;
+        card.isSkillCard = false;
       }
     }
 
@@ -405,13 +450,18 @@ export class GameState {
       return { success: false, clearedSlots: 0 };
     }
 
-    const clearCount = Math.min(REVIVE_CLEAR_SLOTS, this.data.slots.length);
-    this.data.slots.splice(-clearCount, clearCount);
+    const moveCount = Math.min(REVIVE_CLEAR_SLOTS, this.data.slots.length);
+    const availableHoldSpace = HOLD_COUNT - this.data.holdArea.length;
+    const actualMoveCount = Math.min(moveCount, availableHoldSpace);
+    
+    const movedCards = this.data.slots.splice(-actualMoveCount, actualMoveCount);
+    this.data.holdArea.push(...movedCards);
+    
     this.data.reviveUsed[method]++;
     this.data.status = 'playing';
 
     this.emit({ type: 'revived', method });
-    return { success: true, clearedSlots: clearCount };
+    return { success: true, clearedSlots: actualMoveCount };
   }
 
   getElapsedMs(): number {
