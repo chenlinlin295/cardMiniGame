@@ -1,0 +1,9 @@
+{
+  "engine": "cocos-creator",
+  "version": "3.8.0",
+  "name": "animal-card-match",
+  "description": "动物卡牌消除 - 微信/抖音小游戏",
+  "id": "animal-card-match",
+  "readonly": false,
+  "isNew": false
+}

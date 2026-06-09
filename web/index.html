@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>动物卡牌消除</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐾</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- 主菜单 -->
+    <div id="screen-menu" class="screen active">
+      <h1>🐾 动物卡牌消除</h1>
+      <p class="subtitle">选幸运花色 · 三消过关 · 每日挑战</p>
+      <div class="menu-buttons">
+        <button id="btn-daily" class="btn primary">📅 每日挑战</button>
+        <button id="btn-endless" class="btn">♾️ 无尽模式</button>
+      </div>
+      <div id="menu-stats" class="stats"></div>
+      <div id="banner-mock" class="banner-mock">横幅广告位</div>
+    </div>
+
+    <!-- 选幸运花色 -->
+    <div id="screen-lucky" class="screen">
+      <h2>选择幸运花色</h2>
+      <p class="hint">幸运花色的牌是万能牌，可释放技能</p>
+      <div id="suit-picker" class="suit-picker"></div>
+      <button id="btn-start" class="btn primary" disabled>开始游戏</button>
+      <button id="btn-back-menu" class="btn ghost">返回</button>
+    </div>
+
+    <!-- 游戏界面 -->
+    <div id="screen-game" class="screen">
+      <header class="game-header">
+        <span id="game-mode-label">每日挑战</span>
+        <span id="game-moves">步数: 0</span>
+        <span id="game-timer">00:00</span>
+        <button id="btn-pause" class="btn-icon">⏸</button>
+      </header>
+
+      <div id="columns" class="columns"></div>
+
+      <div class="hold-section">
+        <span class="section-label">待用区</span>
+        <div id="hold-area" class="hold-area"></div>
+      </div>
+
+      <div class="slot-section">
+        <span class="section-label">卡槽 <span id="slot-count">0/7</span></span>
+        <div id="slots" class="slots"></div>
+      </div>
+
+      <div id="banner-ingame" class="banner-mock">横幅广告位</div>
+    </div>
+
+    <!-- 幸运牌操作 -->
+    <div id="modal-lucky" class="modal hidden">
+      <div class="modal-content">
+        <h3>幸运牌操作</h3>
+        <p class="hint">手动选择万能消除花色，或释放技能</p>
+        <div id="wild-match-list" class="skill-list"></div>
+        <div id="skill-list-lucky" class="skill-list"></div>
+        <button id="btn-lucky-cancel" class="btn ghost">取消</button>
+      </div>
+    </div>
+
+    <!-- 技能选择 -->
+    <div id="modal-skill" class="modal hidden">
+      <div class="modal-content">
+        <h3>选择技能</h3>
+        <div id="skill-list" class="skill-list"></div>
+        <button id="btn-skill-cancel" class="btn ghost">取消</button>
+      </div>
+    </div>
+
+    <!-- 取牌到待用区 -->
+    <div id="modal-take" class="modal hidden">
+      <div class="modal-content">
+        <h3>选择要移入待用区的牌（最多3张）</h3>
+        <div id="take-slot-picker" class="take-picker"></div>
+        <button id="btn-take-confirm" class="btn primary">确认</button>
+        <button id="btn-take-cancel" class="btn ghost">取消</button>
+      </div>
+    </div>
+
+    <!-- 失败复活 -->
+    <div id="modal-revive" class="modal hidden">
+      <div class="modal-content">
+        <h3>😿 卡槽已满！</h3>
+        <p>选择复活方式继续游戏</p>
+        <button id="btn-revive-video" class="btn primary">📺 看视频复活（清空3槽）</button>
+        <button id="btn-revive-share" class="btn">📤 分享复活</button>
+        <button id="btn-revive-giveup" class="btn ghost">放弃</button>
+      </div>
+    </div>
+
+    <!-- 结算 -->
+    <div id="screen-result" class="screen">
+      <div id="result-content"></div>
+      <button id="btn-result-home" class="btn">返回主页</button>
+      <button id="btn-result-retry" class="btn primary hidden">再玩一次</button>
+      <button id="btn-result-double" class="btn hidden">📺 双倍积分</button>
+    </div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

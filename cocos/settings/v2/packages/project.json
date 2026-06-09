@@ -1,0 +1,9 @@
+{
+  "group-list": ["default"],
+  "collision-matrix": [[true]],
+  "excluded-modules": [],
+  "design-resolution-width": 750,
+  "design-resolution-height": 1334,
+  "fit-width": false,
+  "fit-height": true
+}

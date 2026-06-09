@@ -1,0 +1,11 @@
+node_modules/
+dist/
+web/dist/
+web/game.js
+*.log
+.DS_Store
+library/
+temp/
+local/
+build/
+profiles/

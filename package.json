@@ -1,0 +1,17 @@
+{
+  "name": "animal-card-match",
+  "version": "0.1.0",
+  "description": "2D 卡牌消除小游戏 - 微信/抖音小游戏",
+  "type": "module",
+  "scripts": {
+    "build": "tsc && node scripts/copy-dist.mjs && node scripts/bundle-web.mjs",
+    "dev": "npm run build && npx serve web -p 3000",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0",
+    "serve": "^14.2.3"
+  }
+}
