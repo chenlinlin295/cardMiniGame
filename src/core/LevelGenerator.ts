@@ -55,14 +55,14 @@ export function buildWeightedDeck(weights: number[], luckySuit: Suit, rng: Seede
   for (let suit = 0; suit < weights.length; suit++) {
     for (let i = 0; i < weights[suit]; i++) {
       const s = suit as Suit;
-      deck.push(createCard(s, false));
+      deck.push(createCard(s));
     }
   }
 
   return rng.shuffle(deck);
 }
 
-/** 生成3张技能牌，其余97张普通牌均分到10种花色 */
+/** 生成3张技能牌（Joker花色），其余97张普通牌均分到10种花色 */
 export function buildDeckWithLucky3(_luckySuit: Suit, rng: SeededRandom): Card[] {
   resetCardIdCounter();
   const deck: Card[] = [];
@@ -74,14 +74,13 @@ export function buildDeckWithLucky3(_luckySuit: Suit, rng: SeededRandom): Card[]
   for (let suit = 0; suit < SUIT_COUNT; suit++) {
     const count = PER_SUIT + (suit < EXTRA ? 1 : 0);
     for (let i = 0; i < count; i++) {
-      deck.push(createCard(suit as Suit, false));
+      deck.push(createCard(suit as Suit));
     }
   }
 
-  // 添加3张技能牌（随机花色）
+  // 添加3张技能牌（Joker花色）
   for (let i = 0; i < SKILL_CARD_COUNT; i++) {
-    const randomSuit = rng.nextInt(0, SUIT_COUNT - 1) as Suit;
-    deck.push(createCard(randomSuit, true));
+    deck.push(createCard(Suit.Joker));
   }
 
   return rng.shuffle(deck);
@@ -137,10 +136,10 @@ function getLucky3Weights(): number[] {
 /** 基础可解性检查 */
 function verifyBasicSolvability(columns: Card[][]): boolean {
   const allCards = columns.flat();
-  const skillCardCount = allCards.filter((c) => c.isSkillCard).length;
+  const skillCardCount = allCards.filter((c) => c.suit === Suit.Joker).length;
   const suitCounts = new Array(SUIT_COUNT).fill(0);
   allCards.forEach((c) => {
-    if (!c.isSkillCard || c.skillConsumed) {
+    if (c.suit < SUIT_COUNT) {
       suitCounts[c.suit]++;
     }
   });
@@ -164,14 +163,13 @@ function generateConstructedLevel(
   const deck: Card[] = [];
   for (let suit = 0; suit < weights.length; suit++) {
     for (let i = 0; i < weights[suit]; i++) {
-      deck.push(createCard(suit as Suit, false));
+      deck.push(createCard(suit as Suit));
     }
   }
   
-  // 添加3张技能牌（随机花色）
+  // 添加3张技能牌（Joker花色）
   for (let i = 0; i < 3; i++) {
-    const randomSuit = rng.nextInt(0, SUIT_COUNT - 1) as Suit;
-    deck.push(createCard(randomSuit, true));
+    deck.push(createCard(Suit.Joker));
   }
   
   const shuffledDeck = rng.shuffle(deck);

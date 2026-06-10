@@ -125,6 +125,28 @@ function handleGameEvent(event) {
     renderGame();
   }
   renderGame();
+  checkNeedSkill();
+}
+
+function checkNeedSkill() {
+  if (!controller) return;
+  const state = controller.game.getState();
+  const maxSlots = controller.game.getEffectiveMaxSlots();
+  
+  // 卡槽只剩一个位置，且无可配对消除
+  if (state.slots.length === maxSlots - 1) {
+    const allCards = state.slots.filter(c => !controller.isSkillCard(c));
+    const suits = allCards.map(c => c.suit);
+    const suitCounts = {};
+    suits.forEach(s => {
+      suitCounts[s] = (suitCounts[s] || 0) + 1;
+    });
+    
+    const hasMatch = Object.values(suitCounts).some(count => count >= 3);
+    if (!hasMatch) {
+      showModal('get-skill');
+    }
+  }
 }
 
 function renderGame() {
@@ -161,12 +183,13 @@ function renderGame() {
       const showFace = isBottom || isPeek;
       const extraClass = isPeek && !isBottom ? 'peek-preview' : '';
 
+      const isSkill = controller.isSkillCard(card);
       const el = createCardEl(
         card,
         showFace,
         extraClass,
-        isBottom && card.isSkillCard && !card.skillConsumed,
-        isBottom && controller.isSkillCard(card),
+        isBottom && isSkill,
+        isBottom && isSkill,
       );
 
       if (!showFace) el.classList.add('back');
@@ -207,6 +230,31 @@ function renderGame() {
     columnsEl.appendChild(colEl);
   });
 
+  // 累计技能
+  const skillsListEl = $('#accumulated-skills-list');
+  skillsListEl.innerHTML = '';
+  const accumulatedSkills = controller.getAccumulatedSkills();
+  accumulatedSkills.forEach((skill, idx) => {
+    const info = SKILL_INFO[skill];
+    const item = document.createElement('div');
+    item.className = 'skill-item clickable';
+    item.innerHTML = `
+      <span class="icon">${info.icon}</span>
+      <div class="info">
+        <div class="name">${info.name}</div>
+        <div class="desc">${info.description}</div>
+      </div>
+    `;
+    item.onclick = () => {
+      controller.useAccumulatedSkill(skill);
+      renderGame();
+    };
+    skillsListEl.appendChild(item);
+  });
+  if (accumulatedSkills.length === 0) {
+    skillsListEl.innerHTML = '<div class="empty-hint">暂无累计技能</div>';
+  }
+
   // 待用区
   const holdEl = $('#hold-area');
   holdEl.innerHTML = '';
@@ -232,7 +280,7 @@ function renderGame() {
   slotsEl.classList.toggle('full', state.slots.length >= maxSlots);
   state.slots.forEach((card, idx) => {
     const isSkill = controller.isSkillCard(card);
-    const el = createCardEl(card, true, '', card.isSkillCard && !card.skillConsumed, isSkill);
+    const el = createCardEl(card, true, '', isSkill, isSkill);
     if (isSkill) {
       el.classList.add('clickable');
       el.onclick = () => openLuckyModal(idx);
@@ -421,6 +469,26 @@ function initEvents() {
 
   $('#btn-revive-giveup').onclick = () => {
     hideModal('revive');
+    showResult(false);
+  };
+
+  $('#btn-get-skill-video').onclick = async () => {
+    // 模拟看视频获取两个不同的技能
+    const skills = Object.values(SkillType);
+    const availableSkills = skills.filter(s => s !== SkillType.TakeToHold);
+    const shuffled = [...availableSkills].sort(() => Math.random() - 0.5);
+    const selectedSkills = shuffled.slice(0, 2);
+    
+    selectedSkills.forEach(skill => {
+      controller.addAccumulatedSkill(skill);
+    });
+    
+    hideModal('get-skill');
+    renderGame();
+  };
+
+  $('#btn-get-skill-cancel').onclick = () => {
+    hideModal('get-skill');
     showResult(false);
   };
 

@@ -90,6 +90,18 @@ export class GameController {
     return this.skills.takeToHoldWithSkillCard(skillCardIndex, indices);
   }
 
+  getAccumulatedSkills(): import('../core/types.js').SkillType[] {
+    return this.game.getAccumulatedSkills();
+  }
+
+  addAccumulatedSkill(skill: import('../core/types.js').SkillType): void {
+    this.game.addAccumulatedSkill(skill);
+  }
+
+  useAccumulatedSkill(skill: import('../core/types.js').SkillType): boolean {
+    return this.game.useAccumulatedSkill(skill);
+  }
+
   reviveWithVideo(): Promise<boolean> {
     return new Promise((resolve) => {
       this.ads.showRewarded((success) => {

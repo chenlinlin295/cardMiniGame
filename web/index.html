@@ -46,6 +46,11 @@
         <div id="hold-area" class="hold-area"></div>
       </div>
 
+      <div class="accumulated-skills">
+        <span class="section-label">累计技能</span>
+        <div id="accumulated-skills-list" class="skills-list"></div>
+      </div>
+
       <div class="slot-section">
         <span class="section-label">卡槽 <span id="slot-count">0/7</span></span>
         <div id="slots" class="slots"></div>
@@ -81,6 +86,17 @@
         <div id="take-slot-picker" class="take-picker"></div>
         <button id="btn-take-confirm" class="btn primary">确认</button>
         <button id="btn-take-cancel" class="btn ghost">取消</button>
+      </div>
+    </div>
+
+    <!-- 获取技能 -->
+    <div id="modal-get-skill" class="modal hidden">
+      <div class="modal-content">
+        <h3>⚠️ 无法配对消除</h3>
+        <p>仅剩一个卡槽，看视频获取技能继续游戏</p>
+        <div id="skill-reward-list" class="skill-list"></div>
+        <button id="btn-get-skill-video" class="btn primary">📺 看视频获取技能</button>
+        <button id="btn-get-skill-cancel" class="btn ghost">放弃</button>
       </div>
     </div>
 

@@ -16,11 +16,8 @@ describe('LevelGenerator', () => {
     const config = createDailyLevelConfig(new Date('2026-06-08'));
     const level = generateSolvableLevel(config);
     const allCards = level.columns.flat();
-    const skillCards = allCards.filter(c => c.isSkillCard);
+    const skillCards = allCards.filter(c => c.suit === 10); // Joker花色
     expect(skillCards.length).toBe(3);
-    skillCards.forEach(c => {
-      expect(c.skillConsumed).toBe(false);
-    });
   });
 
   it('8列高度平均分配', () => {
