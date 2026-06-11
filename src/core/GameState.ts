@@ -7,6 +7,7 @@ import {
   SKILL_LIMITS,
   SLOT_COUNT,
   SkillType,
+  Suit,
   type Card,
   type GameSnapshot,
   type GameStateData,
@@ -14,7 +15,6 @@ import {
   type LevelConfig,
   type MatchResult,
   type ReviveResult,
-  type Suit,
 } from './types.js';
 import {
   cloneCards,
@@ -35,6 +35,7 @@ export type GameEvent =
   | { type: 'cardFromHold'; card: Card }
   | { type: 'matched'; results: MatchResult[] }
   | { type: 'skillUsed'; skill: SkillType }
+  | { type: 'skillAdded'; skill: SkillType }
   | { type: 'shuffled' }
   | { type: 'undone' }
   | { type: 'revived'; method: 'video' | 'share' }
@@ -59,6 +60,7 @@ export class GameState {
       extraSlotUntil: 0,
       peekUntil: 0,
       skillUses: createEmptySkillUses(),
+      accumulatedSkills: [],
       undoStack: [],
       moves: 0,
       startTime: Date.now(),
@@ -166,7 +168,7 @@ export class GameState {
     const normals: Card[] = [];
 
     slots.forEach((card) => {
-      if (card.isSkillCard || card.skillConsumed) {
+      if (card.suit === Suit.Joker) {
         specials.push({ card, originalIdx: 0 });
       } else {
         normals.push(card);
@@ -226,18 +228,26 @@ export class GameState {
     return true;
   }
 
-  /** 是否为技能牌 */
+  /** 是否为技能牌（Joker花色） */
   isSkillCard(card: Card): boolean {
-    return card.isSkillCard && !card.skillConsumed;
+    return card.suit === Suit.Joker;
   }
 
-  /** 点击技能牌释放技能 */
+  /** 点击技能牌释放技能，使用后技能牌消失 */
   useSkillFromSkillCard(slotIndex: number, skill: SkillType): boolean {
     if (this.data.status !== 'playing') return false;
     const card = this.data.slots[slotIndex];
     if (!this.isSkillCard(card)) return false;
 
-    return this.applySkill(skill, slotIndex);
+    this.saveSnapshot();
+    // 移除技能牌（使用后消失）
+    this.data.slots.splice(slotIndex, 1);
+    
+    const ok = this.applySkill(skill);
+    if (ok) {
+      this.emit({ type: 'skillUsed', skill });
+    }
+    return ok;
   }
 
   applySkill(skill: SkillType, wildSlotIndex?: number): boolean {
@@ -271,7 +281,7 @@ export class GameState {
     for (const idx of unique) {
       if (idx < 0 || idx >= this.data.slots.length) return false;
       // 检查是否为技能牌（不能选取技能牌）
-      if (this.data.slots[idx].isSkillCard && !this.data.slots[idx].skillConsumed) {
+      if (this.isSkillCard(this.data.slots[idx])) {
         return false;
       }
     }
@@ -334,8 +344,7 @@ export class GameState {
     if (skillSlotIndex !== undefined) {
       const card = this.data.slots[skillSlotIndex];
       if (card && this.isSkillCard(card)) {
-        card.skillConsumed = true;
-        card.isSkillCard = false;
+        this.data.slots.splice(skillSlotIndex, 1);
       }
     }
 
@@ -403,11 +412,10 @@ export class GameState {
       this.emit({ type: 'cardToHold', card });
     }
 
-    // 消耗技能牌
+    // 消耗技能牌（移除）
     const currentSlotIdx = this.data.slots.indexOf(skillCard);
     if (currentSlotIdx >= 0) {
-      skillCard.isSkillCard = false;
-      skillCard.skillConsumed = true;
+      this.data.slots.splice(currentSlotIdx, 1);
     }
 
     this.data.skillUses[SkillType.TakeToHold]++;
@@ -432,8 +440,7 @@ export class GameState {
     if (ok && skill !== SkillType.ExtraSlot) {
       const card = this.data.slots[slotIndex];
       if (card && this.isSkillCard(card)) {
-        card.skillConsumed = true;
-        card.isSkillCard = false;
+        this.data.slots.splice(slotIndex, 1);
       }
     }
 
@@ -482,5 +489,31 @@ export class GameState {
 
   setLuckySuit(suit: Suit): void {
     this.data.luckySuit = suit;
+  }
+
+  /** 获取累计的技能列表 */
+  getAccumulatedSkills(): SkillType[] {
+    return [...this.data.accumulatedSkills];
+  }
+
+  /** 添加累计技能（看视频获得） */
+  addAccumulatedSkill(skill: SkillType): void {
+    this.data.accumulatedSkills.push(skill);
+    this.emit({ type: 'skillAdded', skill });
+  }
+
+  /** 使用累计的技能 */
+  useAccumulatedSkill(skill: SkillType): boolean {
+    const index = this.data.accumulatedSkills.indexOf(skill);
+    if (index === -1) return false;
+
+    this.saveSnapshot();
+    this.data.accumulatedSkills.splice(index, 1);
+    
+    const ok = this.applySkill(skill);
+    if (ok) {
+      this.emit({ type: 'skillUsed', skill });
+    }
+    return ok;
   }
 }

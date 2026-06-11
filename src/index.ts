@@ -1,4 +1,5 @@
 export * from './core/types.js';
+export { SKILL_LIMITS } from './core/types.js';
 export * from './core/utils.js';
 export * from './core/MatchLogic.js';
 export * from './core/LevelGenerator.js';

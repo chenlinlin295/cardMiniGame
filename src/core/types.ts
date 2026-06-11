@@ -1,4 +1,4 @@
-/** 10 种动物花色 */
+/** 10 种动物花色 + 1种技能牌花色 */
 export enum Suit {
   Cat = 0,
   Dog = 1,
@@ -10,10 +10,15 @@ export enum Suit {
   Pig = 7,
   Frog = 8,
   Penguin = 9,
+  Joker = 10,
 }
 
+/** 普通花色数量 */
 export const SUIT_COUNT = 10;
-export const TOTAL_CARDS = 100;
+/** 总花色数量（含技能牌） */
+export const TOTAL_SUIT_COUNT = 11;
+export const TOTAL_CARDS = 90;
+export const SKILL_CARD_COUNT = 3;
 export const COLUMN_COUNT = 8;
 export const SLOT_COUNT = 7;
 export const HOLD_COUNT = 3;
@@ -32,6 +37,7 @@ export const SUIT_NAMES: Record<Suit, string> = {
   [Suit.Pig]: '猪',
   [Suit.Frog]: '蛙',
   [Suit.Penguin]: '企鹅',
+  [Suit.Joker]: '技能',
 };
 
 export const SUIT_EMOJIS: Record<Suit, string> = {
@@ -45,6 +51,7 @@ export const SUIT_EMOJIS: Record<Suit, string> = {
   [Suit.Pig]: '🐷',
   [Suit.Frog]: '🐸',
   [Suit.Penguin]: '🐧',
+  [Suit.Joker]: '⭐',
 };
 
 export enum SkillType {
@@ -70,10 +77,6 @@ export type GameStatus = 'playing' | 'won' | 'lost' | 'paused';
 export interface Card {
   id: string;
   suit: Suit;
-  /** 是否为技能牌 */
-  isSkillCard: boolean;
-  /** 技能已消耗，变为普通牌 */
-  skillConsumed: boolean;
 }
 
 export interface GameSnapshot {
@@ -105,6 +108,8 @@ export interface GameStateData {
   extraSlotUntil: number;
   peekUntil: number;
   skillUses: Record<SkillType, number>;
+  /** 累计的技能（通过看视频获得） */
+  accumulatedSkills: SkillType[];
   undoStack: GameSnapshot[];
   moves: number;
   startTime: number;
@@ -129,7 +134,7 @@ export interface ReviveResult {
   clearedSlots: number;
 }
 
-export const DEFAULT_SUIT_WEIGHTS: number[] = [12, 11, 10, 10, 10, 10, 10, 9, 9, 9];
+export const DEFAULT_SUIT_WEIGHTS: number[] = [9, 9, 9, 9, 9, 9, 9, 9, 9, 9];
 
 export const REVIVE_LIMITS = {
   video: 2,

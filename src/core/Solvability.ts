@@ -1,5 +1,5 @@
-import type { Card, Suit } from './types.js';
-import { COLUMN_COUNT, SLOT_COUNT, HOLD_COUNT } from './types.js';
+import type { Card } from './types.js';
+import { COLUMN_COUNT, SLOT_COUNT, HOLD_COUNT, Suit } from './types.js';
 import { findMatchableSuit, tryAutoMatch, isVictory, isDefeat } from './MatchLogic.js';
 import { SeededRandom } from './utils.js';
 
@@ -103,8 +103,8 @@ export function checkSolvabilityBFS(
 }
 
 function serializeState(state: SimState): string {
-  const colStr = state.columns.map((c) => c.map((card) => `${card.suit}${card.isSkillCard ? 's' : ''}`).join(',')).join('|');
-  const slotStr = state.slots.map((c) => `${c.suit}${c.isSkillCard ? 's' : ''}`).join(',');
+  const colStr = state.columns.map((c) => c.map((card) => `${card.suit}${card.suit === Suit.Joker ? 's' : ''}`).join(',')).join('|');
+  const slotStr = state.slots.map((c) => `${c.suit}${c.suit === Suit.Joker ? 's' : ''}`).join(',');
   const holdStr = state.holdArea.map((c) => `${c.suit}`).join(',');
   return `${colStr}#${slotStr}#${holdStr}`;
 }

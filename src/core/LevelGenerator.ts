@@ -3,6 +3,7 @@ import {
   SUIT_COUNT,
   Suit,
   TOTAL_CARDS,
+  SKILL_CARD_COUNT,
   type Card,
   type LevelConfig,
 } from './types.js';
@@ -21,27 +22,41 @@ export interface GeneratorOptions {
   maxColumnHeight?: number;
 }
 
-/** 根据难度调整花色权重 */
+/** 根据难度调整花色权重 - 确保每种花色数量是3的倍数，总和为90 */
 export function adjustWeightsForDifficulty(base: number[], difficulty: number): number[] {
   const weights = [...base];
   const variance = Math.floor(difficulty * 3);
 
   for (let i = 0; i < weights.length; i++) {
     const delta = Math.floor((i % 2 === 0 ? 1 : -1) * variance * (0.5 + (i / weights.length) * 0.5));
-    weights[i] = Math.max(8, Math.min(12, weights[i] + delta));
+    weights[i] = Math.max(6, Math.min(12, weights[i] + delta));
   }
 
-  // 确保总和为 100
+  // 确保每种花色数量是3的倍数
+  for (let i = 0; i < weights.length; i++) {
+    weights[i] = Math.round(weights[i] / 3) * 3;
+    weights[i] = Math.max(3, weights[i]);
+  }
+
+  // 确保总和为 90
   let sum = weights.reduce((a, b) => a + b, 0);
   while (sum > TOTAL_CARDS) {
-    const idx = weights.indexOf(Math.max(...weights));
-    weights[idx]--;
-    sum--;
+    // 找最大的花色减3
+    let maxIdx = 0;
+    for (let i = 1; i < weights.length; i++) {
+      if (weights[i] > weights[maxIdx] && weights[i] >= 6) maxIdx = i;
+    }
+    weights[maxIdx] -= 3;
+    sum = weights.reduce((a, b) => a + b, 0);
   }
   while (sum < TOTAL_CARDS) {
-    const idx = weights.indexOf(Math.min(...weights));
-    weights[idx]++;
-    sum++;
+    // 找最小的花色加3
+    let minIdx = 0;
+    for (let i = 1; i < weights.length; i++) {
+      if (weights[i] < weights[minIdx]) minIdx = i;
+    }
+    weights[minIdx] += 3;
+    sum = weights.reduce((a, b) => a + b, 0);
   }
 
   return weights;
@@ -55,39 +70,34 @@ export function buildWeightedDeck(weights: number[], luckySuit: Suit, rng: Seede
   for (let suit = 0; suit < weights.length; suit++) {
     for (let i = 0; i < weights[suit]; i++) {
       const s = suit as Suit;
-      deck.push(createCard(s, false));
+      deck.push(createCard(s));
     }
   }
 
   return rng.shuffle(deck);
 }
 
-/** 生成3张技能牌，其余97张普通牌均分到10种花色 */
+/** 生成90张普通牌（10种花色×9张/花色，每种都是3的倍数），3张技能牌独立 */
 export function buildDeckWithLucky3(_luckySuit: Suit, rng: SeededRandom): Card[] {
   resetCardIdCounter();
   const deck: Card[] = [];
-  const SKILL_CARD_COUNT = 3;
-  const NORMAL_COUNT = TOTAL_CARDS - SKILL_CARD_COUNT;
-  const PER_SUIT = Math.floor(NORMAL_COUNT / SUIT_COUNT);
-  const EXTRA = NORMAL_COUNT % SUIT_COUNT;
+  const PER_SUIT = TOTAL_CARDS / SUIT_COUNT; // 90/10 = 9
 
   for (let suit = 0; suit < SUIT_COUNT; suit++) {
-    const count = PER_SUIT + (suit < EXTRA ? 1 : 0);
-    for (let i = 0; i < count; i++) {
-      deck.push(createCard(suit as Suit, false));
+    for (let i = 0; i < PER_SUIT; i++) {
+      deck.push(createCard(suit as Suit));
     }
   }
 
-  // 添加3张技能牌（随机花色）
+  // 添加技能牌（Joker花色），独立于90张普通牌
   for (let i = 0; i < SKILL_CARD_COUNT; i++) {
-    const randomSuit = rng.nextInt(0, SUIT_COUNT - 1) as Suit;
-    deck.push(createCard(randomSuit, true));
+    deck.push(createCard(Suit.Joker));
   }
 
   return rng.shuffle(deck);
 }
 
-/** 将牌组平均分成 6 列（100 张 → 17/17/17/17/16/16） */
+/** 将牌组平均分成列（93 张 → 8列，约12-12-12-12-12-12-11-11） */
 export function splitIntoColumns(deck: Card[], _rng?: SeededRandom, _options?: GeneratorOptions): Card[][] {
   const columns: Card[][] = Array.from({ length: COLUMN_COUNT }, () => []);
   const base = Math.floor(deck.length / COLUMN_COUNT);
@@ -105,11 +115,12 @@ export function splitIntoColumns(deck: Card[], _rng?: SeededRandom, _options?: G
 
 /** 逆向构造可解关卡：3张技能牌，其余均分 */
 export function generateSolvableLevel(config: LevelConfig, options: GeneratorOptions = {}): GeneratedLevel {
-  const rng = new SeededRandom(config.seed);
+  // 添加额外的随机偏移量，使每次游戏技能牌位置不同
+  const rng = new SeededRandom(config.seed + Math.floor(Math.random() * 10000));
   const maxAttempts = options.maxAttempts ?? 50;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const attemptRng = new SeededRandom(config.seed + attempt * 9973);
+    const attemptRng = new SeededRandom(config.seed + attempt * 9973 + Math.floor(Math.random() * 10000));
     const deck = buildDeckWithLucky3(config.luckySuit, attemptRng);
     const columns = splitIntoColumns(deck, attemptRng, options);
 
@@ -124,23 +135,19 @@ export function generateSolvableLevel(config: LevelConfig, options: GeneratorOpt
   return generateConstructedLevel(config, weights, rng);
 }
 
-/** 获取花色权重（3张技能牌，其余均分） */
+/** 获取花色权重（10种花色×9张=90张） */
 function getLucky3Weights(): number[] {
-  const NORMAL_COUNT = TOTAL_CARDS - 3;
-  const PER_SUIT = Math.floor(NORMAL_COUNT / SUIT_COUNT);
-  const EXTRA = NORMAL_COUNT % SUIT_COUNT;
-  return Array.from({ length: SUIT_COUNT }, (_, suit) =>
-    PER_SUIT + (suit < EXTRA ? 1 : 0),
-  );
+  const PER_SUIT = TOTAL_CARDS / SUIT_COUNT; // 90/10 = 9
+  return Array.from({ length: SUIT_COUNT }, () => PER_SUIT);
 }
 
 /** 基础可解性检查 */
 function verifyBasicSolvability(columns: Card[][]): boolean {
   const allCards = columns.flat();
-  const skillCardCount = allCards.filter((c) => c.isSkillCard).length;
+  const skillCardCount = allCards.filter((c) => c.suit === Suit.Joker).length;
   const suitCounts = new Array(SUIT_COUNT).fill(0);
   allCards.forEach((c) => {
-    if (!c.isSkillCard || c.skillConsumed) {
+    if (c.suit < SUIT_COUNT) {
       suitCounts[c.suit]++;
     }
   });
@@ -154,7 +161,7 @@ function verifyBasicSolvability(columns: Card[][]): boolean {
   return skillCardCount * 2 >= remainderNeeds;
 }
 
-/** 逆向构造法 fallback：直接洗牌均分（保证100张） */
+/** 逆向构造法 fallback：90张普通牌 + 技能牌 */
 function generateConstructedLevel(
   config: LevelConfig,
   weights: number[],
@@ -164,16 +171,15 @@ function generateConstructedLevel(
   const deck: Card[] = [];
   for (let suit = 0; suit < weights.length; suit++) {
     for (let i = 0; i < weights[suit]; i++) {
-      deck.push(createCard(suit as Suit, false));
+      deck.push(createCard(suit as Suit));
     }
   }
-  
-  // 添加3张技能牌（随机花色）
-  for (let i = 0; i < 3; i++) {
-    const randomSuit = rng.nextInt(0, SUIT_COUNT - 1) as Suit;
-    deck.push(createCard(randomSuit, true));
+
+  // 添加技能牌（Joker花色），独立于90张普通牌
+  for (let i = 0; i < SKILL_CARD_COUNT; i++) {
+    deck.push(createCard(Suit.Joker));
   }
-  
+
   const shuffledDeck = rng.shuffle(deck);
   const columns = splitIntoColumns(shuffledDeck);
   return { columns, deck: shuffledDeck, suitWeights: weights, seed: config.seed };
