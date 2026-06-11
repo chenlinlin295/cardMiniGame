@@ -17,7 +17,8 @@ export enum Suit {
 export const SUIT_COUNT = 10;
 /** 总花色数量（含技能牌） */
 export const TOTAL_SUIT_COUNT = 11;
-export const TOTAL_CARDS = 100;
+export const TOTAL_CARDS = 90;
+export const SKILL_CARD_COUNT = 3;
 export const COLUMN_COUNT = 8;
 export const SLOT_COUNT = 7;
 export const HOLD_COUNT = 3;
@@ -133,7 +134,7 @@ export interface ReviveResult {
   clearedSlots: number;
 }
 
-export const DEFAULT_SUIT_WEIGHTS: number[] = [12, 11, 10, 10, 10, 10, 10, 9, 9, 9];
+export const DEFAULT_SUIT_WEIGHTS: number[] = [9, 9, 9, 9, 9, 9, 9, 9, 9, 9];
 
 export const REVIVE_LIMITS = {
   video: 2,

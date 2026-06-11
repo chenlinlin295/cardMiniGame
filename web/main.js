@@ -5,6 +5,7 @@ import {
   SUIT_EMOJIS,
   SUIT_NAMES,
   SKILL_INFO,
+  SKILL_LIMITS,
   formatDailyDate,
   getEndlessBestLevel,
 } from './dist/index.js';
@@ -52,50 +53,25 @@ function initMenu() {
   `;
 
   $('#btn-daily').onclick = () => {
-    pendingMode = 'daily';
-    renderSuitPicker();
-    showScreen('lucky');
+    startGame('daily');
   };
 
   $('#btn-endless').onclick = () => {
-    pendingMode = 'endless';
-    renderSuitPicker();
-    showScreen('lucky');
+    startGame('endless');
   };
 }
 
-function renderSuitPicker() {
-  const picker = $('#suit-picker');
-  picker.innerHTML = '';
-  selectedSuit = null;
-  $('#btn-start').disabled = true;
-  $('.hint').textContent = '请选择幸运花色（该花色的牌可手动激活为万能牌）';
-
-  for (let s = 0; s < SUIT_COUNT; s++) {
-    const btn = document.createElement('button');
-    btn.className = 'suit-option' + (selectedSuit === s ? ' selected' : '');
-    btn.innerHTML = `${SUIT_EMOJIS[s]}<span>${SUIT_NAMES[s]}</span>`;
-    btn.onclick = () => {
-      selectedSuit = s;
-      $$('.suit-option').forEach((el, i) => {
-        el.classList.toggle('selected', i === s);
-      });
-      $('#btn-start').disabled = false;
-    };
-    picker.appendChild(btn);
-  }
-}
-
-function startGame() {
-  if (selectedSuit === null) return;
+function startGame(mode) {
+  // 随机选一个花色作为默认（不再让用户选择）
+  const defaultSuit = Math.floor(Math.random() * SUIT_COUNT);
 
   controller =
-    pendingMode === 'daily'
-      ? GameController.createDaily(selectedSuit)
-      : GameController.createEndless(1, selectedSuit);
+    mode === 'daily'
+      ? GameController.createDaily(defaultSuit)
+      : GameController.createEndless(1, defaultSuit);
 
   $('#game-mode-label').textContent =
-    pendingMode === 'daily' ? '📅 每日挑战' : `♾️ 无尽 第${controller.level}关`;
+    mode === 'daily' ? '📅 每日挑战' : `♾️ 无尽 第${controller.level}关`;
 
   controller.game.on(handleGameEvent);
   showScreen('game');
@@ -125,7 +101,6 @@ function handleGameEvent(event) {
     renderGame();
   }
   renderGame();
-  checkNeedSkill();
 }
 
 function checkNeedSkill() {
@@ -197,31 +172,23 @@ function renderGame() {
       // 从下往上拿：底部牌（index 0）最先拿，放在视觉最顶层
       // 底部牌：bottom 值最高，z-index 最高 → 可见且可点击
       const displayDepth = col.length - 1 - layer;
-      el.style.bottom = `${displayDepth * CARD_STEP}px`;
+      const EXTRA_PEEK_GAP = 15; // 透视时额外增加的间隔
+      
+      // 透视技能：拉大第一张牌和第二、三张牌之间的间隔
+      let bottomOffset = displayDepth * CARD_STEP;
+      if (isPeek && !isBottom) {
+        // 透视的卡片（第二、三张）增加额外间隔
+        bottomOffset += EXTRA_PEEK_GAP;
+      }
+      el.style.bottom = `${bottomOffset}px`;
       el.style.zIndex = String(displayDepth);
 
       if (isBottom) {
         el.classList.add('clickable');
-        const isSkillCard = controller.isSkillCard(card);
-        if (isSkillCard) {
-          el.onclick = () => {
-            const state = controller.game.getState();
-            if (state.slots.length < controller.game.getEffectiveMaxSlots()) {
-              controller.pickColumn(colIdx);
-              const newState = controller.game.getState();
-              const skillIdx = newState.slots.findIndex(c => c.id === card.id);
-              if (skillIdx >= 0) {
-                renderGame();
-                setTimeout(() => openLuckyModal(skillIdx), 100);
-              }
-            }
-          };
-        } else {
-          el.onclick = () => {
-            controller.pickColumn(colIdx);
-            renderGame();
-          };
-        }
+        el.onclick = () => {
+          controller.pickColumn(colIdx);
+          renderGame();
+        };
       }
 
       colEl.appendChild(el);
@@ -281,10 +248,11 @@ function renderGame() {
   state.slots.forEach((card, idx) => {
     const isSkill = controller.isSkillCard(card);
     const el = createCardEl(card, true, '', isSkill, isSkill);
-    if (isSkill) {
-      el.classList.add('clickable');
-      el.onclick = () => openLuckyModal(idx);
-    }
+    el.onclick = () => {
+      if (isSkill) {
+        openLuckyModal(idx);
+      }
+    };
     slotsEl.appendChild(el);
   });
 
@@ -298,8 +266,8 @@ function renderGame() {
 
 function createCardEl(card, showFace, extraClass = '', isWild = false, isLucky = false) {
   const el = document.createElement('div');
-  // 如果是技能牌（且未消耗），强制添加 wild 类
-  const isSkill = card.isSkillCard && !card.skillConsumed;
+  // 技能牌：suit === 10 (Suit.Joker)，通过 controller 判断更稳妥
+  const isSkill = controller ? controller.isSkillCard(card) : card.suit === SUIT_COUNT;
   el.className = `card ${extraClass} ${isWild || isSkill ? 'wild' : ''} ${isLucky ? 'lucky' : ''}`.trim();
   el.textContent = showFace ? SUIT_EMOJIS[card.suit] : '';
   return el;
@@ -312,31 +280,33 @@ function openLuckyModal(slotIndex) {
   wildList.innerHTML = '';
   skillList.innerHTML = '';
 
-  const skillTitle = document.createElement('p');
-  skillTitle.className = 'hint';
-  skillTitle.textContent = '释放技能（使用后技能牌变为普通牌）：';
-  skillList.appendChild(skillTitle);
+  const state = controller.game.getState();
+  const skillUses = state.skillUses;
 
   Object.values(SKILL_INFO).forEach((info) => {
     const item = document.createElement('div');
-    item.className = 'skill-item';
+    const isDisabled = skillUses[info.type] >= SKILL_LIMITS[info.type];
+    item.className = `skill-item ${isDisabled ? 'disabled' : ''}`;
     item.innerHTML = `
       <span class="icon">${info.icon}</span>
       <div class="info">
         <div class="name">${info.name}</div>
         <div class="desc">${info.description}</div>
+        <div class="usage">已使用 ${skillUses[info.type]}/${SKILL_LIMITS[info.type]}</div>
       </div>
     `;
-    item.onclick = () => {
-      if (info.type === SkillType.TakeToHold) {
-        hideModal('lucky');
-        openTakeModal();
-      } else {
-        controller.useSkillCard(slotIndex, info.type);
-        hideModal('lucky');
-        renderGame();
-      }
-    };
+    if (!isDisabled) {
+      item.onclick = () => {
+        if (info.type === SkillType.TakeToHold) {
+          hideModal('lucky');
+          openTakeModal();
+        } else {
+          controller.useSkillCard(slotIndex, info.type);
+          hideModal('lucky');
+          renderGame();
+        }
+      };
+    }
     skillList.appendChild(item);
   });
 
@@ -348,26 +318,33 @@ function openSkillModal(slotIndex) {
   const list = $('#skill-list');
   list.innerHTML = '';
 
+  const state = controller.game.getState();
+  const skillUses = state.skillUses;
+
   Object.values(SKILL_INFO).forEach((info) => {
     const item = document.createElement('div');
-    item.className = 'skill-item';
+    const isDisabled = skillUses[info.type] >= SKILL_LIMITS[info.type];
+    item.className = `skill-item ${isDisabled ? 'disabled' : ''}`;
     item.innerHTML = `
       <span class="icon">${info.icon}</span>
       <div class="info">
         <div class="name">${info.name}</div>
         <div class="desc">${info.description}</div>
+        <div class="usage">已使用 ${skillUses[info.type]}/${SKILL_LIMITS[info.type]}</div>
       </div>
     `;
-    item.onclick = () => {
-      if (info.type === SkillType.TakeToHold) {
-        hideModal('skill');
-        openTakeModal();
-      } else {
-        controller.useSkillCard(slotIndex, info.type);
-        hideModal('skill');
-        renderGame();
-      }
-    };
+    if (!isDisabled) {
+      item.onclick = () => {
+        if (info.type === SkillType.TakeToHold) {
+          hideModal('skill');
+          openTakeModal();
+        } else {
+          controller.useSkillCard(slotIndex, info.type);
+          hideModal('skill');
+          renderGame();
+        }
+      };
+    }
     list.appendChild(item);
   });
 
@@ -489,7 +466,6 @@ function initEvents() {
 
   $('#btn-get-skill-cancel').onclick = () => {
     hideModal('get-skill');
-    showResult(false);
   };
 
   $('#btn-result-home').onclick = () => {
