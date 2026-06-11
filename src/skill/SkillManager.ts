@@ -12,7 +12,7 @@ export const SKILL_INFO: Record<SkillType, SkillInfo> = {
   [SkillType.Shuffle]: {
     type: SkillType.Shuffle,
     name: '打乱',
-    description: '全部剩余牌重新随机分配到6列',
+    description: '全部剩余牌重新随机分配到5列',
     icon: '🔀',
   },
   [SkillType.TakeToHold]: {
@@ -61,16 +61,8 @@ export class SkillManager {
     return uses < limits[skill];
   }
 
-  useFromSkillCard(slotIndex: number, skill: SkillType): boolean {
-    return this.game.activateSkillCard(slotIndex, skill);
-  }
-
   takeToHold(slotIndices: number[]): boolean {
     return this.game.takeSlotsToHold(slotIndices);
-  }
-
-  takeToHoldWithSkillCard(skillCardIndex: number, slotIndices: number[]): boolean {
-    return this.game.takeToHoldWithSkillCard(skillCardIndex, slotIndices);
   }
 
   /** 激励视频奖励：额外一次撤销 */

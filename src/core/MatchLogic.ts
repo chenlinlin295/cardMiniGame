@@ -1,21 +1,18 @@
 import type { Card, MatchResult, Suit } from './types.js';
 import { SUIT_COUNT } from './types.js';
 
-/** 统计槽位中各花色数量（技能牌 Joker 不参与自动三消） */
+/** 统计槽位中各花色数量 */
 export function countSlots(slots: Card[]): { counts: number[] } {
   const counts = new Array(SUIT_COUNT).fill(0);
 
   slots.forEach((card) => {
-    // Joker 花色不参与配对
-    if (card.suit < SUIT_COUNT) {
-      counts[card.suit]++;
-    }
+    counts[card.suit]++;
   });
 
   return { counts };
 }
 
-/** 自动三消：仅 3 张同花色，不含技能牌 */
+/** 自动三消：仅 3 张同花色 */
 export function findMatchableSuit(slots: Card[]): Suit | null {
   const { counts } = countSlots(slots);
 
@@ -44,7 +41,6 @@ export function eliminateMatch(slots: Card[], targetSuit: Suit): MatchResult | n
       continue;
     }
 
-    // Joker 花色不参与配对
     if (card.suit === targetSuit) {
       eliminated.push(card);
       taken++;
@@ -64,7 +60,7 @@ export function eliminateMatch(slots: Card[], targetSuit: Suit): MatchResult | n
   };
 }
 
-/** 检查并执行自动三消（仅纯三同花色） */
+/** 检查并执行自动三消 */
 export function tryAutoMatch(slots: Card[]): MatchResult[] {
   const results: MatchResult[] = [];
   let suit = findMatchableSuit(slots);

@@ -103,8 +103,8 @@ export function checkSolvabilityBFS(
 }
 
 function serializeState(state: SimState): string {
-  const colStr = state.columns.map((c) => c.map((card) => `${card.suit}${card.suit === Suit.Joker ? 's' : ''}`).join(',')).join('|');
-  const slotStr = state.slots.map((c) => `${c.suit}${c.suit === Suit.Joker ? 's' : ''}`).join(',');
+  const colStr = state.columns.map((c) => c.map((card) => `${card.suit}`).join(',')).join('|');
+  const slotStr = state.slots.map((c) => `${c.suit}`).join(',');
   const holdStr = state.holdArea.map((c) => `${c.suit}`).join(',');
   return `${colStr}#${slotStr}#${holdStr}`;
 }

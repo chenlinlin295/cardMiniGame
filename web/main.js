@@ -1,29 +1,15 @@
 import {
   GameController,
-  SkillType,
   SUIT_COUNT,
   SUIT_EMOJIS,
-  SUIT_NAMES,
-  SKILL_INFO,
-  SKILL_LIMITS,
   formatDailyDate,
   getEndlessBestLevel,
 } from './dist/index.js';
-
-/** @typedef {import('./dist/core/types.js').Suit} Suit */
-
 let controller = null;
-let pendingMode = 'daily';
-/** @type {number|null} */
-let selectedSuit = null;
-/** @type {number|null} */
-let wildSlotForSkill = null;
-/** @type {number[]} */
-let takeSelectedIndices = [];
 let timerInterval = null;
 
 /** 扑克式层叠：上层压住下层 3/4，仅露出 1/4 */
-const CARD_HEIGHT = 58;
+const CARD_HEIGHT = 68;
 const CARD_OVERLAP = 0.75;
 const CARD_STEP = Math.round(CARD_HEIGHT * (1 - CARD_OVERLAP));
 
@@ -103,27 +89,6 @@ function handleGameEvent(event) {
   renderGame();
 }
 
-function checkNeedSkill() {
-  if (!controller) return;
-  const state = controller.game.getState();
-  const maxSlots = controller.game.getEffectiveMaxSlots();
-  
-  // 卡槽只剩一个位置，且无可配对消除
-  if (state.slots.length === maxSlots - 1) {
-    const allCards = state.slots.filter(c => !controller.isSkillCard(c));
-    const suits = allCards.map(c => c.suit);
-    const suitCounts = {};
-    suits.forEach(s => {
-      suitCounts[s] = (suitCounts[s] || 0) + 1;
-    });
-    
-    const hasMatch = Object.values(suitCounts).some(count => count >= 3);
-    if (!hasMatch) {
-      showModal('get-skill');
-    }
-  }
-}
-
 function renderGame() {
   if (!controller) return;
   const state = controller.game.getState();
@@ -153,37 +118,30 @@ function renderGame() {
     );
 
     col.forEach((card, layer) => {
-      const isBottom = layer === 0;
+      const isTop = layer === col.length - 1;
       const isPeek = peekIds.has(card.id);
-      const showFace = isBottom || isPeek;
-      const extraClass = isPeek && !isBottom ? 'peek-preview' : '';
+      const showFace = isTop || isPeek;
+      const extraClass = isPeek && !isTop ? 'peek-preview' : '';
 
-      const isSkill = controller.isSkillCard(card);
-      const el = createCardEl(
-        card,
-        showFace,
-        extraClass,
-        isBottom && isSkill,
-        isBottom && isSkill,
-      );
+      const el = createCardEl(card, showFace, extraClass);
 
       if (!showFace) el.classList.add('back');
 
-      // 从下往上拿：底部牌（index 0）最先拿，放在视觉最顶层
-      // 底部牌：bottom 值最高，z-index 最高 → 可见且可点击
-      const displayDepth = col.length - 1 - layer;
+      // 从上往下拿：顶部牌（index 最后）最先拿，放在视觉最顶层
+      // 顶部牌：bottom 值最高，z-index 最高 → 可见且可点击
+      const displayDepth = layer;
       const EXTRA_PEEK_GAP = 15; // 透视时额外增加的间隔
       
-      // 透视技能：拉大第一张牌和第二、三张牌之间的间隔
+      // 透视技能：拉大顶部牌和下面两张牌之间的间隔
       let bottomOffset = displayDepth * CARD_STEP;
-      if (isPeek && !isBottom) {
+      if (isPeek && !isTop) {
         // 透视的卡片（第二、三张）增加额外间隔
         bottomOffset += EXTRA_PEEK_GAP;
       }
       el.style.bottom = `${bottomOffset}px`;
       el.style.zIndex = String(displayDepth);
 
-      if (isBottom) {
+      if (isTop) {
         el.classList.add('clickable');
         el.onclick = () => {
           controller.pickColumn(colIdx);
@@ -196,31 +154,6 @@ function renderGame() {
 
     columnsEl.appendChild(colEl);
   });
-
-  // 累计技能
-  const skillsListEl = $('#accumulated-skills-list');
-  skillsListEl.innerHTML = '';
-  const accumulatedSkills = controller.getAccumulatedSkills();
-  accumulatedSkills.forEach((skill, idx) => {
-    const info = SKILL_INFO[skill];
-    const item = document.createElement('div');
-    item.className = 'skill-item clickable';
-    item.innerHTML = `
-      <span class="icon">${info.icon}</span>
-      <div class="info">
-        <div class="name">${info.name}</div>
-        <div class="desc">${info.description}</div>
-      </div>
-    `;
-    item.onclick = () => {
-      controller.useAccumulatedSkill(skill);
-      renderGame();
-    };
-    skillsListEl.appendChild(item);
-  });
-  if (accumulatedSkills.length === 0) {
-    skillsListEl.innerHTML = '<div class="empty-hint">暂无累计技能</div>';
-  }
 
   // 待用区
   const holdEl = $('#hold-area');
@@ -246,13 +179,7 @@ function renderGame() {
   slotsEl.innerHTML = '';
   slotsEl.classList.toggle('full', state.slots.length >= maxSlots);
   state.slots.forEach((card, idx) => {
-    const isSkill = controller.isSkillCard(card);
-    const el = createCardEl(card, true, '', isSkill, isSkill);
-    el.onclick = () => {
-      if (isSkill) {
-        openLuckyModal(idx);
-      }
-    };
+    const el = createCardEl(card, true);
     slotsEl.appendChild(el);
   });
 
@@ -264,115 +191,11 @@ function renderGame() {
   }
 }
 
-function createCardEl(card, showFace, extraClass = '', isWild = false, isLucky = false) {
+function createCardEl(card, showFace, extraClass = '') {
   const el = document.createElement('div');
-  // 技能牌：suit === 10 (Suit.Joker)，通过 controller 判断更稳妥
-  const isSkill = controller ? controller.isSkillCard(card) : card.suit === SUIT_COUNT;
-  el.className = `card ${extraClass} ${isWild || isSkill ? 'wild' : ''} ${isLucky ? 'lucky' : ''}`.trim();
+  el.className = `card ${extraClass}`.trim();
   el.textContent = showFace ? SUIT_EMOJIS[card.suit] : '';
   return el;
-}
-
-function openLuckyModal(slotIndex) {
-  wildSlotForSkill = slotIndex;
-  const wildList = $('#wild-match-list');
-  const skillList = $('#skill-list-lucky');
-  wildList.innerHTML = '';
-  skillList.innerHTML = '';
-
-  const state = controller.game.getState();
-  const skillUses = state.skillUses;
-
-  Object.values(SKILL_INFO).forEach((info) => {
-    const item = document.createElement('div');
-    const isDisabled = skillUses[info.type] >= SKILL_LIMITS[info.type];
-    item.className = `skill-item ${isDisabled ? 'disabled' : ''}`;
-    item.innerHTML = `
-      <span class="icon">${info.icon}</span>
-      <div class="info">
-        <div class="name">${info.name}</div>
-        <div class="desc">${info.description}</div>
-        <div class="usage">已使用 ${skillUses[info.type]}/${SKILL_LIMITS[info.type]}</div>
-      </div>
-    `;
-    if (!isDisabled) {
-      item.onclick = () => {
-        if (info.type === SkillType.TakeToHold) {
-          hideModal('lucky');
-          openTakeModal();
-        } else {
-          controller.useSkillCard(slotIndex, info.type);
-          hideModal('lucky');
-          renderGame();
-        }
-      };
-    }
-    skillList.appendChild(item);
-  });
-
-  showModal('lucky');
-}
-
-function openSkillModal(slotIndex) {
-  wildSlotForSkill = slotIndex;
-  const list = $('#skill-list');
-  list.innerHTML = '';
-
-  const state = controller.game.getState();
-  const skillUses = state.skillUses;
-
-  Object.values(SKILL_INFO).forEach((info) => {
-    const item = document.createElement('div');
-    const isDisabled = skillUses[info.type] >= SKILL_LIMITS[info.type];
-    item.className = `skill-item ${isDisabled ? 'disabled' : ''}`;
-    item.innerHTML = `
-      <span class="icon">${info.icon}</span>
-      <div class="info">
-        <div class="name">${info.name}</div>
-        <div class="desc">${info.description}</div>
-        <div class="usage">已使用 ${skillUses[info.type]}/${SKILL_LIMITS[info.type]}</div>
-      </div>
-    `;
-    if (!isDisabled) {
-      item.onclick = () => {
-        if (info.type === SkillType.TakeToHold) {
-          hideModal('skill');
-          openTakeModal();
-        } else {
-          controller.useSkillCard(slotIndex, info.type);
-          hideModal('skill');
-          renderGame();
-        }
-      };
-    }
-    list.appendChild(item);
-  });
-
-  showModal('skill');
-}
-
-function openTakeModal() {
-  takeSelectedIndices = [];
-  const picker = $('#take-slot-picker');
-  picker.innerHTML = '';
-  const state = controller.game.getState();
-
-  state.slots.forEach((card, idx) => {
-    const el = createCardEl(card, true);
-    el.onclick = () => {
-      const i = takeSelectedIndices.indexOf(idx);
-      if (i >= 0) {
-        takeSelectedIndices.splice(i, 1);
-        el.classList.remove('selected-for-take');
-      } else if (takeSelectedIndices.length < 3) {
-        takeSelectedIndices.push(idx);
-        el.classList.add('selected-for-take');
-      }
-    };
-    picker.appendChild(el);
-  });
-
-  showModal('take');
 }
 
 function showResult(won) {
@@ -407,83 +230,61 @@ function showResult(won) {
 }
 
 function initEvents() {
-  $('#btn-start').onclick = startGame;
-  $('#btn-back-menu').onclick = () => showScreen('menu');
-  $('#btn-lucky-cancel').onclick = () => hideModal('lucky');
-  $('#btn-skill-cancel').onclick = () => hideModal('skill');
-  $('#btn-take-cancel').onclick = () => hideModal('take');
-  $('#btn-take-confirm').onclick = () => {
-    if (takeSelectedIndices.length > 0) {
-      let ok = false;
-      if (wildSlotForSkill !== null && wildSlotForSkill !== undefined) {
-        ok = controller.takeToHoldWithSkillCard(wildSlotForSkill, takeSelectedIndices);
-        wildSlotForSkill = null;
-      } else {
-        ok = controller.takeToHold(takeSelectedIndices);
-      }
+  const backMenu = $('#btn-back-menu');
+  if (backMenu) backMenu.onclick = () => showScreen('menu');
+
+  const btnReviveVideo = $('#btn-revive-video');
+  if (btnReviveVideo) {
+    btnReviveVideo.onclick = async () => {
+      const ok = await controller.reviveWithVideo();
       if (ok) {
-        hideModal('take');
+        hideModal('revive');
         renderGame();
       }
-    }
-  };
+    };
+  }
 
-  $('#btn-revive-video').onclick = async () => {
-    const ok = await controller.reviveWithVideo();
-    if (ok) {
-      hideModal('revive');
-      renderGame();
-    }
-  };
-
-  $('#btn-revive-share').onclick = async () => {
-    const ok = await controller.reviveWithShare();
-    if (ok) {
-      hideModal('revive');
-      renderGame();
-    }
-  };
-
-  $('#btn-revive-giveup').onclick = () => {
-    hideModal('revive');
-    showResult(false);
-  };
-
-  $('#btn-get-skill-video').onclick = async () => {
-    // 模拟看视频获取两个不同的技能
-    const skills = Object.values(SkillType);
-    const availableSkills = skills.filter(s => s !== SkillType.TakeToHold);
-    const shuffled = [...availableSkills].sort(() => Math.random() - 0.5);
-    const selectedSkills = shuffled.slice(0, 2);
-    
-    selectedSkills.forEach(skill => {
-      controller.addAccumulatedSkill(skill);
-    });
-    
-    hideModal('get-skill');
-    renderGame();
-  };
-
-  $('#btn-get-skill-cancel').onclick = () => {
-    hideModal('get-skill');
-  };
-
-  $('#btn-result-home').onclick = () => {
-    controller = null;
-    showScreen('menu');
-    initMenu();
-  };
-
-  $('#btn-result-double').onclick = () => {
-    controller.ads.showRewardedForDoubleScore((success) => {
-      if (success) {
-        const content = $('#result-content .score');
-        const current = parseInt(content.textContent, 10);
-        content.textContent = `${current * 2} 分（双倍）`;
-        $('#btn-result-double').classList.add('hidden');
+  const btnReviveShare = $('#btn-revive-share');
+  if (btnReviveShare) {
+    btnReviveShare.onclick = async () => {
+      const ok = await controller.reviveWithShare();
+      if (ok) {
+        hideModal('revive');
+        renderGame();
       }
-    });
-  };
+    };
+  }
+
+  const btnReviveGiveup = $('#btn-revive-giveup');
+  if (btnReviveGiveup) {
+    btnReviveGiveup.onclick = () => {
+      hideModal('revive');
+      showResult(false);
+    };
+  }
+
+  const btnResultHome = $('#btn-result-home');
+  if (btnResultHome) {
+    btnResultHome.onclick = () => {
+      controller = null;
+      showScreen('menu');
+      initMenu();
+    };
+  }
+
+  const btnResultDouble = $('#btn-result-double');
+  if (btnResultDouble) {
+    btnResultDouble.onclick = () => {
+      controller.ads.showRewardedForDoubleScore((success) => {
+        if (success) {
+          const content = $('#result-content .score');
+          const current = parseInt(content.textContent, 10);
+          content.textContent = `${current * 2} 分（双倍）`;
+          $('#btn-result-double').classList.add('hidden');
+        }
+      });
+    };
+  }
 }
 
 initMenu();

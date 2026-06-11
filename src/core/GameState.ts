@@ -35,7 +35,6 @@ export type GameEvent =
   | { type: 'cardFromHold'; card: Card }
   | { type: 'matched'; results: MatchResult[] }
   | { type: 'skillUsed'; skill: SkillType }
-  | { type: 'skillAdded'; skill: SkillType }
   | { type: 'shuffled' }
   | { type: 'undone' }
   | { type: 'revived'; method: 'video' | 'share' }
@@ -60,7 +59,6 @@ export class GameState {
       extraSlotUntil: 0,
       peekUntil: 0,
       skillUses: createEmptySkillUses(),
-      accumulatedSkills: [],
       undoStack: [],
       moves: 0,
       startTime: Date.now(),
@@ -69,7 +67,6 @@ export class GameState {
       level: config.level,
       seed: level.seed,
       status: 'playing',
-      luckySkillUses: 0,
       endlessFailStreak: 0,
     };
   }
@@ -116,14 +113,14 @@ export class GameState {
     }
   }
 
-  /** 从列底取牌（从下往上） */
+  /** 从列顶取牌（从上往下） */
   pickFromColumn(columnIndex: number): boolean {
     if (this.data.status !== 'playing') return false;
     const col = this.data.columns[columnIndex];
     if (!col || col.length === 0) return false;
 
     this.saveSnapshot();
-    const card = col.shift()!;
+    const card = col.pop()!;
 
     this.data.slots.push(card);
     this.data.moves++;
@@ -164,22 +161,7 @@ export class GameState {
   /** 将槽内同花色牌排列在一起 */
   private groupSlotsBySuit(): void {
     const slots = this.data.slots;
-    const specials: { card: Card; originalIdx: number }[] = [];
-    const normals: Card[] = [];
-
-    slots.forEach((card) => {
-      if (card.suit === Suit.Joker) {
-        specials.push({ card, originalIdx: 0 });
-      } else {
-        normals.push(card);
-      }
-    });
-
-    normals.sort((a, b) => a.suit - b.suit);
-
-    const result: Card[] = [...normals];
-    specials.forEach(({ card }) => result.unshift(card));
-    this.data.slots = result;
+    slots.sort((a, b) => a.suit - b.suit);
   }
 
   /** 获取当前有效槽位数 */
@@ -200,8 +182,9 @@ export class GameState {
   getPeekCards(columnIndex: number): Card[] {
     const col = this.data.columns[columnIndex];
     if (!col) return [];
-    const end = Math.min(col.length, 3);
-    return col.slice(1, end);
+    // 从上往下取牌：顶部牌是数组最后一个，透视显示顶部下面的2张牌
+    const start = Math.max(0, col.length - 3);
+    return col.slice(start, col.length - 1);
   }
 
   private checkExtraSlotExpiry(): void {
@@ -228,28 +211,6 @@ export class GameState {
     return true;
   }
 
-  /** 是否为技能牌（Joker花色） */
-  isSkillCard(card: Card): boolean {
-    return card.suit === Suit.Joker;
-  }
-
-  /** 点击技能牌释放技能，使用后技能牌消失 */
-  useSkillFromSkillCard(slotIndex: number, skill: SkillType): boolean {
-    if (this.data.status !== 'playing') return false;
-    const card = this.data.slots[slotIndex];
-    if (!this.isSkillCard(card)) return false;
-
-    this.saveSnapshot();
-    // 移除技能牌（使用后消失）
-    this.data.slots.splice(slotIndex, 1);
-    
-    const ok = this.applySkill(skill);
-    if (ok) {
-      this.emit({ type: 'skillUsed', skill });
-    }
-    return ok;
-  }
-
   applySkill(skill: SkillType, wildSlotIndex?: number): boolean {
     if (this.data.status !== 'playing') return false;
     const limit = SKILL_LIMITS[skill];
@@ -271,7 +232,7 @@ export class GameState {
     }
   }
 
-  /** 从卡槽取牌到待用区（不能取技能牌） */
+  /** 从卡槽取牌到待用区 */
   takeSlotsToHold(slotIndices: number[]): boolean {
     if (this.data.status !== 'playing') return false;
     if (slotIndices.length === 0 || slotIndices.length > 3) return false;
@@ -280,10 +241,6 @@ export class GameState {
     const unique = [...new Set(slotIndices)].sort((a, b) => b - a);
     for (const idx of unique) {
       if (idx < 0 || idx >= this.data.slots.length) return false;
-      // 检查是否为技能牌（不能选取技能牌）
-      if (this.isSkillCard(this.data.slots[idx])) {
-        return false;
-      }
     }
 
     this.saveSnapshot();
@@ -341,13 +298,6 @@ export class GameState {
     this.data.extraSlotUntil = Date.now() + EXTRA_SLOT_DURATION_MS;
     this.data.skillUses[SkillType.ExtraSlot]++;
 
-    if (skillSlotIndex !== undefined) {
-      const card = this.data.slots[skillSlotIndex];
-      if (card && this.isSkillCard(card)) {
-        this.data.slots.splice(skillSlotIndex, 1);
-      }
-    }
-
     this.emit({ type: 'skillUsed', skill: SkillType.ExtraSlot });
     return true;
   }
@@ -370,81 +320,6 @@ export class GameState {
     this.emit({ type: 'undone' });
     this.emit({ type: 'skillUsed', skill: SkillType.Undo });
     return true;
-  }
-
-  /** 消耗技能牌释放技能 */
-  activateSkillCard(slotIndex: number, skill: SkillType): boolean {
-    if (this.data.status !== 'playing') return false;
-    const card = this.data.slots[slotIndex];
-    if (!this.isSkillCard(card)) return false;
-
-    const ok = this.applySkillWithSkillConsumption(skill, slotIndex);
-    return ok;
-  }
-
-  /** 通过技能牌释放"取牌"技能：消耗技能牌并将选中的卡槽牌移到待用区 */
-  takeToHoldWithSkillCard(skillCardIndex: number, slotIndices: number[]): boolean {
-    if (this.data.status !== 'playing') return false;
-    const skillCard = this.data.slots[skillCardIndex];
-    if (!this.isSkillCard(skillCard)) return false;
-
-    // 过滤掉被选中的卡槽牌中的技能牌索引
-    const filteredSlots = slotIndices.filter((idx) => {
-      if (idx === skillCardIndex) return false;
-      const card = this.data.slots[idx];
-      return !card || !this.isSkillCard(card);
-    });
-    if (filteredSlots.length === 0 || filteredSlots.length > 3) return false;
-
-    this.saveSnapshot();
-    const unique = [...new Set(filteredSlots)].sort((a, b) => b - a);
-
-    if (this.data.holdArea.length + unique.length > HOLD_COUNT) return false;
-
-    // 先移入选中的牌到待用区
-    const taken: Card[] = [];
-    for (const idx of unique) {
-      if (idx < 0 || idx >= this.data.slots.length) continue;
-      taken.unshift(this.data.slots.splice(idx, 1)[0]);
-    }
-    for (const card of taken) {
-      this.data.holdArea.push(card);
-      this.emit({ type: 'cardToHold', card });
-    }
-
-    // 消耗技能牌（移除）
-    const currentSlotIdx = this.data.slots.indexOf(skillCard);
-    if (currentSlotIdx >= 0) {
-      this.data.slots.splice(currentSlotIdx, 1);
-    }
-
-    this.data.skillUses[SkillType.TakeToHold]++;
-    this.emit({ type: 'skillUsed', skill: SkillType.TakeToHold });
-    return true;
-  }
-
-  private applySkillWithSkillConsumption(skill: SkillType, slotIndex: number): boolean {
-    if (skill === SkillType.TakeToHold) return false;
-
-    const ok =
-      skill === SkillType.Undo
-        ? this.undo()
-        : skill === SkillType.Shuffle
-          ? this.shuffle()
-          : skill === SkillType.Peek
-            ? this.peek()
-            : skill === SkillType.ExtraSlot
-              ? this.extraSlot(slotIndex)
-              : false;
-
-    if (ok && skill !== SkillType.ExtraSlot) {
-      const card = this.data.slots[slotIndex];
-      if (card && this.isSkillCard(card)) {
-        this.data.slots.splice(slotIndex, 1);
-      }
-    }
-
-    return ok;
   }
 
   revive(method: 'video' | 'share'): ReviveResult {
@@ -489,31 +364,5 @@ export class GameState {
 
   setLuckySuit(suit: Suit): void {
     this.data.luckySuit = suit;
-  }
-
-  /** 获取累计的技能列表 */
-  getAccumulatedSkills(): SkillType[] {
-    return [...this.data.accumulatedSkills];
-  }
-
-  /** 添加累计技能（看视频获得） */
-  addAccumulatedSkill(skill: SkillType): void {
-    this.data.accumulatedSkills.push(skill);
-    this.emit({ type: 'skillAdded', skill });
-  }
-
-  /** 使用累计的技能 */
-  useAccumulatedSkill(skill: SkillType): boolean {
-    const index = this.data.accumulatedSkills.indexOf(skill);
-    if (index === -1) return false;
-
-    this.saveSnapshot();
-    this.data.accumulatedSkills.splice(index, 1);
-    
-    const ok = this.applySkill(skill);
-    if (ok) {
-      this.emit({ type: 'skillUsed', skill });
-    }
-    return ok;
   }
 }

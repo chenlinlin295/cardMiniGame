@@ -3,7 +3,6 @@ import {
   SUIT_COUNT,
   Suit,
   TOTAL_CARDS,
-  SKILL_CARD_COUNT,
   type Card,
   type LevelConfig,
 } from './types.js';
@@ -77,7 +76,7 @@ export function buildWeightedDeck(weights: number[], luckySuit: Suit, rng: Seede
   return rng.shuffle(deck);
 }
 
-/** 生成90张普通牌（10种花色×9张/花色，每种都是3的倍数），3张技能牌独立 */
+/** 生成90张普通牌（10种花色×9张/花色，每种都是3的倍数） */
 export function buildDeckWithLucky3(_luckySuit: Suit, rng: SeededRandom): Card[] {
   resetCardIdCounter();
   const deck: Card[] = [];
@@ -89,15 +88,10 @@ export function buildDeckWithLucky3(_luckySuit: Suit, rng: SeededRandom): Card[]
     }
   }
 
-  // 添加技能牌（Joker花色），独立于90张普通牌
-  for (let i = 0; i < SKILL_CARD_COUNT; i++) {
-    deck.push(createCard(Suit.Joker));
-  }
-
   return rng.shuffle(deck);
 }
 
-/** 将牌组平均分成列（93 张 → 8列，约12-12-12-12-12-12-11-11） */
+/** 将牌组平均分成列（90 张 → 5列，每列18张） */
 export function splitIntoColumns(deck: Card[], _rng?: SeededRandom, _options?: GeneratorOptions): Card[][] {
   const columns: Card[][] = Array.from({ length: COLUMN_COUNT }, () => []);
   const base = Math.floor(deck.length / COLUMN_COUNT);
@@ -113,9 +107,8 @@ export function splitIntoColumns(deck: Card[], _rng?: SeededRandom, _options?: G
   return columns;
 }
 
-/** 逆向构造可解关卡：3张技能牌，其余均分 */
+/** 逆向构造可解关卡 */
 export function generateSolvableLevel(config: LevelConfig, options: GeneratorOptions = {}): GeneratedLevel {
-  // 添加额外的随机偏移量，使每次游戏技能牌位置不同
   const rng = new SeededRandom(config.seed + Math.floor(Math.random() * 10000));
   const maxAttempts = options.maxAttempts ?? 50;
 
@@ -144,24 +137,22 @@ function getLucky3Weights(): number[] {
 /** 基础可解性检查 */
 function verifyBasicSolvability(columns: Card[][]): boolean {
   const allCards = columns.flat();
-  const skillCardCount = allCards.filter((c) => c.suit === Suit.Joker).length;
   const suitCounts = new Array(SUIT_COUNT).fill(0);
   allCards.forEach((c) => {
-    if (c.suit < SUIT_COUNT) {
-      suitCounts[c.suit]++;
-    }
+    suitCounts[c.suit]++;
   });
 
-  let remainderNeeds = 0;
+  // 确保每种花色数量都是3的倍数
   for (let s = 0; s < SUIT_COUNT; s++) {
-    const rem = suitCounts[s] % 3;
-    if (rem > 0) remainderNeeds += rem;
+    if (suitCounts[s] % 3 !== 0) {
+      return false;
+    }
   }
 
-  return skillCardCount * 2 >= remainderNeeds;
+  return true;
 }
 
-/** 逆向构造法 fallback：90张普通牌 + 技能牌 */
+/** 逆向构造法 fallback */
 function generateConstructedLevel(
   config: LevelConfig,
   weights: number[],
@@ -173,11 +164,6 @@ function generateConstructedLevel(
     for (let i = 0; i < weights[suit]; i++) {
       deck.push(createCard(suit as Suit));
     }
-  }
-
-  // 添加技能牌（Joker花色），独立于90张普通牌
-  for (let i = 0; i < SKILL_CARD_COUNT; i++) {
-    deck.push(createCard(Suit.Joker));
   }
 
   const shuffledDeck = rng.shuffle(deck);

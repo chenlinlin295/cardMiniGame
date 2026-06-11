@@ -21,15 +21,6 @@
       <div id="banner-mock" class="banner-mock">横幅广告位</div>
     </div>
 
-    <!-- 选幸运花色 -->
-    <div id="screen-lucky" class="screen">
-      <h2>选择幸运花色</h2>
-      <p class="hint">技能牌可释放技能，使用后变为普通牌</p>
-      <div id="suit-picker" class="suit-picker"></div>
-      <button id="btn-start" class="btn primary" disabled>开始游戏</button>
-      <button id="btn-back-menu" class="btn ghost">返回</button>
-    </div>
-
     <!-- 游戏界面 -->
     <div id="screen-game" class="screen">
       <header class="game-header">
@@ -46,58 +37,12 @@
         <div id="hold-area" class="hold-area"></div>
       </div>
 
-      <div class="accumulated-skills">
-        <span class="section-label">累计技能</span>
-        <div id="accumulated-skills-list" class="skills-list"></div>
-      </div>
-
       <div class="slot-section">
         <span class="section-label">卡槽 <span id="slot-count">0/7</span></span>
         <div id="slots" class="slots"></div>
       </div>
 
       <div id="banner-ingame" class="banner-mock">横幅广告位</div>
-    </div>
-
-    <!-- 幸运牌操作 -->
-    <div id="modal-lucky" class="modal hidden">
-      <div class="modal-content">
-        <h3>幸运牌操作</h3>
-        <p class="hint">手动选择万能消除花色，或释放技能</p>
-        <div id="wild-match-list" class="skill-list"></div>
-        <div id="skill-list-lucky" class="skill-list"></div>
-        <button id="btn-lucky-cancel" class="btn ghost">取消</button>
-      </div>
-    </div>
-
-    <!-- 技能选择 -->
-    <div id="modal-skill" class="modal hidden">
-      <div class="modal-content">
-        <h3>选择技能</h3>
-        <div id="skill-list" class="skill-list"></div>
-        <button id="btn-skill-cancel" class="btn ghost">取消</button>
-      </div>
-    </div>
-
-    <!-- 取牌到待用区 -->
-    <div id="modal-take" class="modal hidden">
-      <div class="modal-content">
-        <h3>选择要移入待用区的牌（最多3张）</h3>
-        <div id="take-slot-picker" class="take-picker"></div>
-        <button id="btn-take-confirm" class="btn primary">确认</button>
-        <button id="btn-take-cancel" class="btn ghost">取消</button>
-      </div>
-    </div>
-
-    <!-- 获取技能 -->
-    <div id="modal-get-skill" class="modal hidden">
-      <div class="modal-content">
-        <h3>⚠️ 无法配对消除</h3>
-        <p>仅剩一个卡槽，看视频获取技能继续游戏</p>
-        <div id="skill-reward-list" class="skill-list"></div>
-        <button id="btn-get-skill-video" class="btn primary">📺 看视频获取技能</button>
-        <button id="btn-get-skill-cancel" class="btn ghost">放弃</button>
-      </div>
     </div>
 
     <!-- 失败复活 -->

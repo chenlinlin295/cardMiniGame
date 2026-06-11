@@ -74,32 +74,20 @@ export class GameController {
     return this.game.pickFromHold(index);
   }
 
-  useSkillCard(slotIndex: number, skill: import('../core/types.js').SkillType): boolean {
-    return this.skills.useFromSkillCard(slotIndex, skill);
-  }
-
-  isSkillCard(card: import('../core/types.js').Card): boolean {
-    return this.game.isSkillCard(card);
-  }
-
   takeToHold(indices: number[]): boolean {
     return this.skills.takeToHold(indices);
   }
 
-  takeToHoldWithSkillCard(skillCardIndex: number, indices: number[]): boolean {
-    return this.skills.takeToHoldWithSkillCard(skillCardIndex, indices);
-  }
-
   getAccumulatedSkills(): import('../core/types.js').SkillType[] {
-    return this.game.getAccumulatedSkills();
+    return [];
   }
 
   addAccumulatedSkill(skill: import('../core/types.js').SkillType): void {
-    this.game.addAccumulatedSkill(skill);
+    // 技能牌已移除，此方法不再使用
   }
 
   useAccumulatedSkill(skill: import('../core/types.js').SkillType): boolean {
-    return this.game.useAccumulatedSkill(skill);
+    return false;
   }
 
   reviveWithVideo(): Promise<boolean> {
