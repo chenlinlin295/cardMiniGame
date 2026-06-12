@@ -1,4 +1,4 @@
-/** 10 种动物花色 */
+/** 10 种动物花色 + 1种技能牌花色 */
 export enum Suit {
   Cat = 0,
   Dog = 1,
@@ -10,13 +10,15 @@ export enum Suit {
   Pig = 7,
   Frog = 8,
   Penguin = 9,
+  Joker = 10,
 }
 
-/** 花色数量 */
+/** 普通花色数量 */
 export const SUIT_COUNT = 10;
-export const TOTAL_SUIT_COUNT = 10;
+/** 总花色数量（含技能牌） */
+export const TOTAL_SUIT_COUNT = 11;
 export const TOTAL_CARDS = 90;
-export const SKILL_CARD_COUNT = 0;
+export const SKILL_CARD_COUNT = 3;
 export const COLUMN_COUNT = 5;
 export const SLOT_COUNT = 7;
 export const HOLD_COUNT = 3;
@@ -34,7 +36,8 @@ export const SUIT_NAMES: Record<Suit, string> = {
   [Suit.Koala]: '考拉',
   [Suit.Pig]: '猪',
   [Suit.Frog]: '蛙',
-  [Suit.Penguin]: '企鹅',
+  [Suit.Penguin]: '🐧',
+  [Suit.Joker]: '技能',
 };
 
 export const SUIT_EMOJIS: Record<Suit, string> = {
@@ -48,6 +51,7 @@ export const SUIT_EMOJIS: Record<Suit, string> = {
   [Suit.Pig]: '🐷',
   [Suit.Frog]: '🐸',
   [Suit.Penguin]: '🐧',
+  [Suit.Joker]: '⭐',
 };
 
 export enum SkillType {
@@ -55,15 +59,15 @@ export enum SkillType {
   TakeToHold = 'takeToHold',
   Undo = 'undo',
   Peek = 'peek',
-  ExtraSlot = 'extraSlot',
+  Collect = 'collect',
 }
 
 export const SKILL_LIMITS: Record<SkillType, number> = {
   [SkillType.Shuffle]: 1,
-  [SkillType.TakeToHold]: 99,
-  [SkillType.Undo]: 3,
-  [SkillType.Peek]: 99,
-  [SkillType.ExtraSlot]: 99,
+  [SkillType.TakeToHold]: 1,
+  [SkillType.Undo]: 1,
+  [SkillType.Peek]: 1,
+  [SkillType.Collect]: 1,
 };
 
 export type GameMode = 'daily' | 'endless';
@@ -104,6 +108,8 @@ export interface GameStateData {
   extraSlotUntil: number;
   peekUntil: number;
   skillUses: Record<SkillType, number>;
+  /** 每局游戏中通过广告获取的技能（每种技能仅限一次） */
+  skillAdGranted: Record<SkillType, boolean>;
   undoStack: GameSnapshot[];
   moves: number;
   startTime: number;
@@ -129,7 +135,7 @@ export interface ReviveResult {
 export const DEFAULT_SUIT_WEIGHTS: number[] = [9, 9, 9, 9, 9, 9, 9, 9, 9, 9];
 
 export const REVIVE_LIMITS = {
-  video: 2,
+  video: 1,
   share: 1,
 } as const;
 

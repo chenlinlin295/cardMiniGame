@@ -1,5 +1,4 @@
 import {
-  EXTRA_SLOT_DURATION_MS,
   HOLD_COUNT,
   PEEK_DURATION_MS,
   REVIVE_CLEAR_SLOTS,
@@ -28,6 +27,10 @@ import {
   tryAutoMatch,
 } from './MatchLogic.js';
 import { generateSolvableLevel } from './LevelGenerator.js';
+import {
+  claimDailyFreeSkill,
+  getDailyFreeSkills,
+} from './DailySeed.js';
 
 export type GameEvent =
   | { type: 'cardPicked'; column: number; card: Card }
@@ -59,6 +62,13 @@ export class GameState {
       extraSlotUntil: 0,
       peekUntil: 0,
       skillUses: createEmptySkillUses(),
+      skillAdGranted: {
+        shuffle: false,
+        takeToHold: false,
+        undo: false,
+        peek: false,
+        collect: false,
+      },
       undoStack: [],
       moves: 0,
       startTime: Date.now(),
@@ -211,11 +221,93 @@ export class GameState {
     return true;
   }
 
-  applySkill(skill: SkillType, wildSlotIndex?: number): boolean {
-    if (this.data.status !== 'playing') return false;
-    const limit = SKILL_LIMITS[skill];
-    if (this.data.skillUses[skill] >= limit) return false;
+  /** 检查技能是否可使用（包含每日免费和广告获取逻辑） */
+  canUseSkill(skill: SkillType): { canUse: boolean; reason?: string } {
+    if (this.data.status !== 'playing') {
+      return { canUse: false, reason: '游戏未进行' };
+    }
 
+    const limit = SKILL_LIMITS[skill];
+    const used = this.data.skillUses[skill];
+
+    // 如果还有剩余次数，直接可用
+    if (used < limit) {
+      return { canUse: true };
+    }
+
+    // 检查每日免费技能是否可用
+    const dailyFree = getDailyFreeSkills();
+    const skillKey = skill as 'shuffle' | 'undo' | 'peek';
+    if (dailyFree[skillKey] === false) {
+      return { canUse: true, reason: 'daily_free' };
+    }
+
+    // 检查广告获取是否可用
+    if (this.data.skillAdGranted[skill] === false) {
+      return { canUse: true, reason: 'ad_grant' };
+    }
+
+    return { canUse: false, reason: 'exhausted' };
+  }
+
+  /** 尝试使用技能（自动处理每日免费和广告获取） */
+  tryApplySkill(skill: SkillType): { success: boolean; newUses: number; grantedBy?: 'daily' | 'ad' } {
+    const check = this.canUseSkill(skill);
+    if (!check.canUse) {
+      return { success: false, newUses: this.data.skillUses[skill] };
+    }
+
+    const limit = SKILL_LIMITS[skill];
+    const used = this.data.skillUses[skill];
+
+    // 如果还有剩余次数，直接使用
+    if (used < limit) {
+      const result = this.applySkillDirect(skill);
+      return { success: result, newUses: this.data.skillUses[skill] };
+    }
+
+    // 检查每日免费技能
+    const skillKey = skill as 'shuffle' | 'undo' | 'peek';
+    const dailyFree = getDailyFreeSkills();
+    if (dailyFree[skillKey] === false) {
+      claimDailyFreeSkill(skillKey);
+      const result = this.applySkillDirect(skill);
+      return { success: result, newUses: this.data.skillUses[skill], grantedBy: 'daily' };
+    }
+
+    // 检查广告获取
+    if (this.data.skillAdGranted[skill] === false) {
+      this.data.skillAdGranted[skill] = true;
+      const result = this.applySkillDirect(skill);
+      return { success: result, newUses: this.data.skillUses[skill], grantedBy: 'ad' };
+    }
+
+    return { success: false, newUses: this.data.skillUses[skill] };
+  }
+
+  /** 标记技能已通过广告获取（由GameController在广告完成后调用） */
+  grantSkillViaAd(skill: SkillType): boolean {
+    if (this.data.status !== 'playing') return false;
+    if (this.data.skillAdGranted[skill]) return false; // 已经获取过了
+
+    this.data.skillAdGranted[skill] = true;
+    return true;
+  }
+
+  /** 检查每日免费技能是否还有剩余 */
+  hasDailyFreeSkill(skill: SkillType): boolean {
+    const skillKey = skill as 'shuffle' | 'undo' | 'peek';
+    const dailyFree = getDailyFreeSkills();
+    return dailyFree[skillKey] === false;
+  }
+
+  /** 检查广告获取是否还有剩余 */
+  canGrantViaAd(skill: SkillType): boolean {
+    return this.data.skillAdGranted[skill] === false;
+  }
+
+  /** 直接应用技能（内部使用，不检查次数） */
+  private applySkillDirect(skill: SkillType): boolean {
     switch (skill) {
       case SkillType.Undo:
         return this.undo();
@@ -223,13 +315,16 @@ export class GameState {
         return this.shuffle();
       case SkillType.Peek:
         return this.peek();
-      case SkillType.ExtraSlot:
-        return this.extraSlot(wildSlotIndex);
-      case SkillType.TakeToHold:
-        return false; // 需要额外参数，走 takeSlotsToHold
+      case SkillType.Collect:
+        return this.collect();
       default:
         return false;
     }
+  }
+
+  applySkill(skill: SkillType, wildSlotIndex?: number): boolean {
+    const result = this.tryApplySkill(skill);
+    return result.success;
   }
 
   /** 从卡槽取牌到待用区 */
@@ -293,13 +388,83 @@ export class GameState {
     return true;
   }
 
-  private extraSlot(skillSlotIndex?: number): boolean {
-    this.data.maxSlots = SLOT_COUNT + 1;
-    this.data.extraSlotUntil = Date.now() + EXTRA_SLOT_DURATION_MS;
-    this.data.skillUses[SkillType.ExtraSlot]++;
+  /** 凑齐技能：从现有牌中凑齐3张同花色消除 */
+  private collect(): boolean {
+    // 统计所有可用牌的花色数量（列顶 + 卡槽 + 待用区）
+    const suitCounts = new Map<Suit, { count: number; sources: { location: string; index: number }[] }>();
 
-    this.emit({ type: 'skillUsed', skill: SkillType.ExtraSlot });
-    return true;
+    // 统计列顶牌
+    this.data.columns.forEach((col, colIdx) => {
+      if (col.length > 0) {
+        const card = col[col.length - 1];
+        const info = suitCounts.get(card.suit) || { count: 0, sources: [] };
+        info.count++;
+        info.sources.push({ location: 'column', index: colIdx });
+        suitCounts.set(card.suit, info);
+      }
+    });
+
+    // 统计卡槽牌
+    this.data.slots.forEach((card, slotIdx) => {
+      const info = suitCounts.get(card.suit) || { count: 0, sources: [] };
+      info.count++;
+      info.sources.push({ location: 'slot', index: slotIdx });
+      suitCounts.set(card.suit, info);
+    });
+
+    // 统计待用区牌
+    this.data.holdArea.forEach((card, holdIdx) => {
+      const info = suitCounts.get(card.suit) || { count: 0, sources: [] };
+      info.count++;
+      info.sources.push({ location: 'hold', index: holdIdx });
+      suitCounts.set(card.suit, info);
+    });
+
+    // 找到能凑齐3张的花色（排除技能牌花色）
+    const JOKER_SUIT_VALUE = 10; // Suit.Joker 的值
+    for (const [suit, info] of suitCounts.entries()) {
+      if (info.count >= 3 && (suit as number) !== JOKER_SUIT_VALUE) {
+        this.saveSnapshot();
+        
+        // 取出3张牌
+        const taken: Card[] = [];
+        let remaining = 3;
+        
+        // 先从待用区取（优先消耗待用区的牌）
+        for (let i = info.sources.length - 1; i >= 0 && remaining > 0; i--) {
+          const src = info.sources[i];
+          if (src.location === 'hold') {
+            taken.push(this.data.holdArea.splice(src.index, 1)[0]);
+            remaining--;
+          }
+        }
+        
+        // 再从卡槽取
+        for (let i = info.sources.length - 1; i >= 0 && remaining > 0; i--) {
+          const src = info.sources[i];
+          if (src.location === 'slot') {
+            taken.push(this.data.slots.splice(src.index, 1)[0]);
+            remaining--;
+          }
+        }
+        
+        // 最后从列顶取
+        for (let i = info.sources.length - 1; i >= 0 && remaining > 0; i--) {
+          const src = info.sources[i];
+          if (src.location === 'column') {
+            taken.push(this.data.columns[src.index].pop()!);
+            remaining--;
+          }
+        }
+
+        this.data.skillUses[SkillType.Collect]++;
+        this.emit({ type: 'matched', results: [{ eliminated: taken, matchedSuit: suit }] });
+        this.emit({ type: 'skillUsed', skill: SkillType.Collect });
+        return this.checkEndState();
+      }
+    }
+
+    return false; // 没有能凑齐的花色
   }
 
   undo(): boolean {
@@ -344,6 +509,13 @@ export class GameState {
 
     this.emit({ type: 'revived', method });
     return { success: true, clearedSlots: actualMoveCount };
+  }
+
+  /** 是否还可以复活（每局游戏只能复活一次，视频或分享二选一） */
+  canRevive(): boolean {
+    if (this.data.status !== 'lost') return false;
+    const totalUsed = this.data.reviveUsed.video + this.data.reviveUsed.share;
+    return totalUsed < 1;
   }
 
   getElapsedMs(): number {

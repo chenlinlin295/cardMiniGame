@@ -214,6 +214,68 @@ h2, h3 {
   animation: pulse-danger 0.5s ease;
 }
 
+/* 技能按钮区域 */
+.skill-section {
+  margin-bottom: 12px;
+}
+
+.skill-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  padding: 8px;
+}
+
+.skill-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 70px;
+  position: relative;
+}
+
+.skill-btn:hover:not(.disabled) {
+  background: rgba(255, 211, 105, 0.2);
+  transform: translateY(-2px);
+}
+
+.skill-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--muted);
+}
+
+.skill-btn .skill-icon {
+  font-size: 1.5rem;
+}
+
+.skill-btn .skill-name {
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.skill-btn .skill-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #e74c3c;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
+}
+
 @keyframes pulse-danger {
   0%, 100% { box-shadow: none; }
   50% { box-shadow: 0 0 16px var(--danger); }

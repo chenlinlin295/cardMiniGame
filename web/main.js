@@ -1,5 +1,6 @@
 import {
   GameController,
+  SKILL_INFO,
   SUIT_COUNT,
   SUIT_EMOJIS,
   formatDailyDate,
@@ -78,7 +79,11 @@ function startTimer() {
 
 function handleGameEvent(event) {
   if (event.type === 'lost') {
-    setTimeout(() => showModal('revive'), 300);
+    if (controller && controller.canRevive()) {
+      setTimeout(() => showModal('revive'), 300);
+    } else {
+      setTimeout(() => showResult(false), 300);
+    }
   }
   if (event.type === 'won') {
     setTimeout(() => showResult(true), 500);
@@ -101,6 +106,7 @@ function renderGame() {
   // 列（扑克式层叠）
   const columnsEl = $('#columns');
   columnsEl.innerHTML = '';
+
   state.columns.forEach((col, colIdx) => {
     const colEl = document.createElement('div');
     colEl.className = 'column';
@@ -131,7 +137,7 @@ function renderGame() {
       // 顶部牌：bottom 值最高，z-index 最高 → 可见且可点击
       const displayDepth = layer;
       const EXTRA_PEEK_GAP = 15; // 透视时额外增加的间隔
-      
+
       // 透视技能：拉大顶部牌和下面两张牌之间的间隔
       let bottomOffset = displayDepth * CARD_STEP;
       if (isPeek && !isTop) {
@@ -154,6 +160,9 @@ function renderGame() {
 
     columnsEl.appendChild(colEl);
   });
+
+  // 技能按钮区域（底部平铺）
+  renderSkillButtons();
 
   // 待用区
   const holdEl = $('#hold-area');
@@ -178,7 +187,7 @@ function renderGame() {
   const slotsEl = $('#slots');
   slotsEl.innerHTML = '';
   slotsEl.classList.toggle('full', state.slots.length >= maxSlots);
-  state.slots.forEach((card, idx) => {
+  state.slots.forEach((card) => {
     const el = createCardEl(card, true);
     slotsEl.appendChild(el);
   });
@@ -189,6 +198,84 @@ function renderGame() {
     empty.style.opacity = '0.15';
     slotsEl.appendChild(empty);
   }
+}
+
+/** 渲染技能按钮区域 */
+function renderSkillButtons() {
+  if (!controller) return;
+  
+  const skillBtnsEl = $('#skill-buttons');
+  if (!skillBtnsEl) return;
+  
+  skillBtnsEl.innerHTML = '';
+  const state = controller.game.getState();
+  
+  // 只显示可用的技能：打乱、撤销、透视
+  const skills = [
+    { type: 'shuffle', icon: '🔀', name: '打乱', desc: '重新分配' },
+    { type: 'undo', icon: '↩️', name: '撤销', desc: '回退一步' },
+    { type: 'peek', icon: '👁️', name: '透视', desc: '查看下两张' },
+  ];
+  
+  skills.forEach(skill => {
+    const check = controller.canUseSkill(skill.type);
+    // 计算剩余可用次数（所有技能默认1次）
+    const used = state.skillUses[skill.type] || 0;
+    const limit = 1;
+    const remaining = limit - used;
+    
+    // 禁用条件：无剩余次数 且 没有每日免费机会 且 没有广告获取机会
+    const hasDailyFree = check.reason === 'daily_free';
+    const hasAdGrant = check.reason === 'ad_grant';
+    const disabled = remaining <= 0 && !hasDailyFree && !hasAdGrant;
+    
+    // 显示逻辑：有剩余次数显示数字，否则显示+
+    const displayCount = remaining > 0 ? remaining : '+';
+    
+    const btn = document.createElement('button');
+    btn.className = `skill-btn ${disabled ? 'disabled' : ''}`;
+    btn.innerHTML = `
+      <span class="skill-icon">${skill.icon}</span>
+      <span class="skill-name">${skill.name}</span>
+      <span class="skill-badge">${displayCount}</span>
+    `;
+    
+    btn.onclick = async () => {
+      await handleSkillClick(skill.type);
+      renderGame();
+    };
+    
+    skillBtnsEl.appendChild(btn);
+  });
+}
+
+/** 处理技能按钮点击 */
+async function handleSkillClick(skillType) {
+  const check = controller.canUseSkill(skillType);
+  
+  if (!check.canUse) {
+    // 技能已耗尽
+    return;
+  }
+  
+  if (check.reason === 'daily_free') {
+    // 每日免费技能，直接使用
+    controller.applySkill(skillType);
+    return;
+  }
+  
+  if (check.reason === 'ad_grant') {
+    // 需要看广告获取技能
+    const granted = await controller.showAdForSkill(skillType);
+    if (granted) {
+      // 广告获取成功，使用技能
+      controller.applySkill(skillType);
+    }
+    return;
+  }
+  
+  // 正常情况，还有剩余次数
+  controller.applySkill(skillType);
 }
 
 function createCardEl(card, showFace, extraClass = '') {
@@ -285,6 +372,50 @@ function initEvents() {
       });
     };
   }
+}
+
+/** 打开技能选择弹窗 */
+function openSkillModal(slotIndex) {
+  const skillList = $('#skill-list');
+  skillList.innerHTML = '';
+  
+  const state = controller.game.getState();
+  
+  // 遍历所有技能
+  Object.values(SKILL_INFO).forEach((skill) => {
+    const uses = state.skillUses[skill.type] || 0;
+    const limit = 99; // 使用次数限制
+    
+    const item = document.createElement('div');
+    item.className = 'skill-item';
+    item.innerHTML = `
+      <div class="skill-icon">${skill.icon}</div>
+      <div class="skill-name">${skill.name}</div>
+      <div class="skill-desc">${skill.description}</div>
+      <div class="skill-usage">${uses}/${limit}</div>
+    `;
+    
+    item.onclick = () => {
+      // 使用技能
+      const ok = controller.applySkill(skill.type, slotIndex);
+      if (ok) {
+        hideModal('skill');
+        renderGame();
+      }
+    };
+    
+    skillList.appendChild(item);
+  });
+  
+  // 取消按钮
+  const btnCancel = $('#btn-skill-cancel');
+  if (btnCancel) {
+    btnCancel.onclick = () => {
+      hideModal('skill');
+    };
+  }
+  
+  showModal('skill');
 }
 
 initMenu();

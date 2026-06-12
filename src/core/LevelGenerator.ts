@@ -3,6 +3,7 @@ import {
   SUIT_COUNT,
   Suit,
   TOTAL_CARDS,
+  SKILL_CARD_COUNT,
   type Card,
   type LevelConfig,
 } from './types.js';
@@ -86,6 +87,11 @@ export function buildDeckWithLucky3(_luckySuit: Suit, rng: SeededRandom): Card[]
     for (let i = 0; i < PER_SUIT; i++) {
       deck.push(createCard(suit as Suit));
     }
+  }
+
+  // 添加技能牌（Joker花色），独立于90张普通牌
+  for (let i = 0; i < SKILL_CARD_COUNT; i++) {
+    deck.push(createCard(Suit.Joker));
   }
 
   return rng.shuffle(deck);

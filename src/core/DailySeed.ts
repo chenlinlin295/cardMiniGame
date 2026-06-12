@@ -105,3 +105,39 @@ export function setEndlessFailStreak(streak: number): void {
   if (typeof localStorage === 'undefined') return;
   localStorage.setItem('endless_fail_streak', String(streak));
 }
+
+export interface DailyFreeSkills {
+  date: string;
+  shuffle: boolean;
+  undo: boolean;
+  peek: boolean;
+}
+
+export function getDailyFreeSkills(date: Date = new Date()): DailyFreeSkills {
+  if (typeof localStorage === 'undefined') {
+    return { date: formatDailyDate(date), shuffle: false, undo: false, peek: false };
+  }
+  const key = `daily_free_skills_${formatDailyDate(date)}`;
+  const raw = localStorage.getItem(key);
+  if (raw) {
+    return JSON.parse(raw) as DailyFreeSkills;
+  }
+  // 新的一天，默认没领取过
+  return { date: formatDailyDate(date), shuffle: false, undo: false, peek: false };
+}
+
+export function saveDailyFreeSkills(skills: DailyFreeSkills): void {
+  if (typeof localStorage === 'undefined') return;
+  const key = `daily_free_skills_${skills.date}`;
+  localStorage.setItem(key, JSON.stringify(skills));
+}
+
+export function claimDailyFreeSkill(skill: 'shuffle' | 'undo' | 'peek'): boolean {
+  const skills = getDailyFreeSkills();
+  if (skills[skill]) {
+    return false; // 已经领取过了
+  }
+  skills[skill] = true;
+  saveDailyFreeSkills(skills);
+  return true;
+}
