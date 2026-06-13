@@ -1,40 +1,40 @@
-# 动物卡牌消除
+# 萌宠大冒险
 
-2D 休闲卡牌消除小游戏，面向微信/抖音小游戏平台，以广告为主要赢利模式。
+羊了个羊式三消叠牌休闲小游戏，只面向微信小程序移动端，以广告为主要赢利模式。
 
-## 玩法
+**完整玩法规格见 [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md)**（权威文档）。
 
-- 100 张牌、10 种动物花色，随机分成 6 列
-- 底部 7 个卡槽，仅可取每列最前一张
-- 开局选择幸运花色，幸运牌为万能牌并可释放技能
-- 槽内同花色 3 张自动消除
-- 6 列 + 卡槽 + 待用区全部清空即胜利；卡槽满则失败
+## 玩法摘要
 
-## 模式
+- **分关卡棋盘**：普通 **4×3（12列，每列2张）**，困难 **4×5（20列，每列5~6张）**；仅列顶可点；**7 格单卡槽** + 上方 **3 个移出堆叠位（默认隐藏）**
+- **两关制**：普通 **24 张 / 120 秒** → 困难 **117 张 / 480 秒（非常虐）**；困难通关奖励动物入 **收集册**
+- **失败**：7 槽单卡占满或超时；复活按类型独立计次（**超时1次 + 槽满1次**）
+- **三技能**：移出（点击后按7槽重排结果自动移出前3张，FIFO）· 凑齐（仅从现有牌中补齐三消，不生牌）· 洗牌（每日各送 1 次，可看广告补 1 次）
+- **复活**：时间复活=加时；槽满复活=7 槽全上移到移出区（3-3-1分摞，可逐层点回）
+- **通关判定**：棋盘、卡槽、移出区三处卡牌全部清空
+- **UI**：顶栏/技能以 **Icon** 为主；首页 GIF 动图；**36 种动物总池**，对局采用“头像与底牌色解耦”的同局唯一分色映射（普通8/困难18抽样）
+- **排行**：双页签（抓到几个 / 抓到几种）；右侧展示头像昵称对应统计值，无对局分数
 
-- **每日挑战**：全服同种子同局，固定幸运花色
-- **无尽模式**：难度递增，记录最高关卡
+## 文档
 
-## 技能（5 种）
-
-| 技能 | 效果 |
+| 文档 | 说明 |
 |------|------|
-| 打乱 | 剩余牌重新随机分配到 6 列 |
-| 取牌 | 从卡槽移最多 3 张到待用区 |
-| 撤销 | 回退上一步 |
-| 透视 | 每列展示接下来 2 张牌（10 秒） |
-| 额外槽位 | 临时 8 槽（30 秒） |
+| [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) | 玩法功能规格 |
+| [`docs/JIMENG_DESIGN_BRIEF.md`](docs/JIMENG_DESIGN_BRIEF.md) | 即梦整页设计稿 Prompt |
+| [`docs/JIMENG_ASSET_PROMPTS.md`](docs/JIMENG_ASSET_PROMPTS.md) | 即梦单个素材 Prompt |
+| [`DOCS.md`](DOCS.md) | 文档索引与产品愿望 |
 
 ## 项目结构
 
 ```
 src/                  # 核心 TypeScript 逻辑（引擎无关）
-  core/               # GameState, MatchLogic, LevelGenerator, DailySeed
+  core/               # GameState, MatchLogic, LevelGenerator, Solvability
   skill/              # SkillManager
-  ad/                 # AdManager（微信/抖音/Web 抽象）
+  ad/                 # AdManager（微信激励视频/Web mock）
   modes/              # GameController
 web/                  # Web 可玩原型（HTML/CSS/JS）
 cocos/                # Cocos Creator 3.x 项目骨架
+docs/                 # 设计文档
 tests/                # Vitest 单元测试
 ```
 
@@ -47,28 +47,19 @@ npm test         # 运行测试
 npm run dev      # 启动 Web 原型 (http://localhost:3000)
 ```
 
-## Cocos Creator 集成
+## 微信小程序集成
 
-1. 用 Cocos Creator 3.8+ 打开 `cocos/` 目录
-2. 将 `src/` 链接或复制到 `assets/scripts/core/`
-3. 创建场景：Main（主菜单）、Game（对局）、Result（结算）
-4. 将 `GameManager.ts` 挂到 Game 场景
-5. 构建发布 → 微信小游戏 / 抖音小游戏
+1. 核心逻辑保持在 `src/`，Web 仅用于本地原型调试
+2. 发布目标只考虑微信小程序 / 微信小游戏移动端
+3. 素材按 @2x 输出，设计基准见 `docs/JIMENG_ASSET_PROMPTS.md`
 
 ## 广告接入
 
-在 `src/ad/AdManager.ts` 中配置各平台 adUnitId：
+在 `src/ad/AdManager.ts` 中配置微信广告位 id：
 
-- 激励视频：复活、双倍积分、额外撤销
-- 插屏：每日挑战结算、无尽每 3 局失败
+- 激励视频：复活、技能补次
+- 插屏：结算（按需）
 - 横幅：主界面与对局底部
-
-## 开发阶段
-
-- [x] Phase 1：核心原型（6 列 + 7 槽 + 三消 + 万能牌 + 关卡生成）
-- [x] Phase 2：5 技能 + 待用区 + 每日/无尽模式
-- [x] Phase 3：AdManager + Web UI 原型 + Cocos 骨架
-- [x] Phase 4：单元测试 + 难度估算
 
 ## License
 

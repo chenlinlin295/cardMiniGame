@@ -3,54 +3,104 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>动物卡牌消除</title>
+  <title>萌宠大冒险</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐾</text></svg>" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="app">
-    <!-- 主菜单 -->
+    <!-- 首页 -->
     <div id="screen-menu" class="screen active">
-      <h1>🐾 动物卡牌消除</h1>
-      <p class="subtitle">选幸运花色 · 三消过关 · 每日挑战</p>
-      <div class="menu-buttons">
+      <header class="top-bar">
+        <button id="btn-settings" class="icon-btn" title="设置">⚙️</button>
+        <button id="btn-rules" class="icon-btn" title="规则">📖</button>
+      </header>
+
+      <div class="menu-hero">
+        <div id="hero-pet" class="hero-pet">🐱</div>
+        <h1 class="game-title">萌宠大冒险</h1>
+        <p class="subtitle">三消叠牌 · 收集萌宠 · 每日挑战</p>
+      </div>
+
+      <div id="menu-stats" class="stats"></div>
+
+      <nav class="bottom-nav">
+        <button id="btn-rank" class="nav-btn">
+          <span class="nav-icon">🏆</span>
+          <span class="nav-label">排行榜</span>
+        </button>
+        <button id="btn-start" class="nav-btn primary">
+          <span class="nav-icon">▶</span>
+          <span class="nav-label">开始游戏</span>
+        </button>
+        <button id="btn-collection" class="nav-btn">
+          <span class="nav-icon">📚</span>
+          <span class="nav-label">收集册</span>
+        </button>
+      </nav>
+
+      <div class="mode-picker hidden" id="mode-picker">
         <button id="btn-daily" class="btn primary">📅 每日挑战</button>
         <button id="btn-endless" class="btn">♾️ 无尽模式</button>
       </div>
-      <div id="menu-stats" class="stats"></div>
-      <div id="banner-mock" class="banner-mock">横幅广告位</div>
     </div>
 
-    <!-- 游戏界面 -->
+    <!-- 对局页 -->
     <div id="screen-game" class="screen">
       <header class="game-header">
-        <span id="game-mode-label">每日挑战</span>
-        <span id="game-moves">步数: 0</span>
-        <span id="game-timer">00:00</span>
-        <button id="btn-pause" class="btn-icon">⏸</button>
+        <span id="game-timer" class="timer">00:00</span>
+        <button id="btn-pause" class="icon-btn" title="暂停">⏸</button>
       </header>
 
       <div id="columns" class="columns"></div>
 
-      <div class="hold-section">
-        <span class="section-label">待用区</span>
+      <section class="hold-section">
+        <span class="section-label">移出暂存</span>
         <div id="hold-area" class="hold-area"></div>
-      </div>
+      </section>
 
-      <div class="slot-section">
-        <span class="section-label">卡槽 <span id="slot-count">0/7</span></span>
+      <section class="slot-section">
+        <span class="section-label">收集盘 <span id="slot-count">0/7</span></span>
         <div id="slots" class="slots"></div>
-      </div>
+      </section>
 
-      <div id="banner-ingame" class="banner-mock">横幅广告位</div>
+      <footer class="skill-bar">
+        <button id="btn-skill-move" class="skill-btn" title="移出">↗️</button>
+        <button id="btn-skill-match" class="skill-btn" title="凑齐">✨</button>
+        <button id="btn-skill-shuffle" class="skill-btn" title="洗牌">🔀</button>
+      </footer>
     </div>
 
-    <!-- 失败复活 -->
+    <!-- 暂停弹窗 -->
+    <div id="modal-pause" class="modal hidden">
+      <div class="modal-content">
+        <h3>⏸ 游戏暂停</h3>
+        <button id="btn-resume" class="btn primary">继续游戏</button>
+        <button id="btn-quit" class="btn ghost">返回首页</button>
+      </div>
+    </div>
+
+    <!-- 规则弹窗 -->
+    <div id="modal-rules" class="modal hidden">
+      <div class="modal-content">
+        <h3>📖 游戏规则</h3>
+        <ul class="rules-list">
+          <li>点击每列最顶部的卡牌放入收集盘</li>
+          <li>收集盘内相同动物凑满 3 张自动消除</li>
+          <li>收集盘满且无法消除则失败，可看广告复活</li>
+          <li>移出：把收集盘最多 3 张移到暂存区</li>
+          <li>凑齐 / 洗牌：辅助技能（开发中）</li>
+        </ul>
+        <button id="btn-rules-close" class="btn primary">知道了</button>
+      </div>
+    </div>
+
+    <!-- 复活弹窗 -->
     <div id="modal-revive" class="modal hidden">
       <div class="modal-content">
-        <h3>😿 卡槽已满！</h3>
+        <h3>😿 收集盘已满！</h3>
         <p>选择复活方式继续游戏</p>
-        <button id="btn-revive-video" class="btn primary">📺 看视频复活（清空3槽）</button>
+        <button id="btn-revive-video" class="btn primary">📺 看视频复活</button>
         <button id="btn-revive-share" class="btn">📤 分享复活</button>
         <button id="btn-revive-giveup" class="btn ghost">放弃</button>
       </div>
