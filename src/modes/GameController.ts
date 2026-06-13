@@ -90,6 +90,44 @@ export class GameController {
     return false;
   }
 
+  applySkill(skill: import('../core/types.js').SkillType): boolean {
+    return this.game.applySkill(skill);
+  }
+
+  /** 检查技能是否可使用 */
+  canUseSkill(skill: import('../core/types.js').SkillType): { canUse: boolean; reason?: string } {
+    return this.game.canUseSkill(skill);
+  }
+
+  /** 检查每日免费技能是否还有剩余 */
+  hasDailyFreeSkill(skill: import('../core/types.js').SkillType): boolean {
+    return this.game.hasDailyFreeSkill(skill);
+  }
+
+  /** 检查广告获取是否还有剩余 */
+  canGrantSkillViaAd(skill: import('../core/types.js').SkillType): boolean {
+    return this.game.canGrantViaAd(skill);
+  }
+
+  /** 看广告获取技能 */
+  showAdForSkill(skill: import('../core/types.js').SkillType): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.ads.showRewarded((success) => {
+        if (success) {
+          const granted = this.game.grantSkillViaAd(skill);
+          resolve(granted);
+        } else {
+          resolve(false);
+        }
+      });
+    });
+  }
+
+  /** 是否还可以复活 */
+  canRevive(): boolean {
+    return this.game.canRevive();
+  }
+
   reviveWithVideo(): Promise<boolean> {
     return new Promise((resolve) => {
       this.ads.showRewarded((success) => {

@@ -55,6 +55,7 @@ export function deepCloneState(state: import('./types.js').GameStateData): impor
     slots: cloneCards(state.slots),
     holdArea: cloneCards(state.holdArea),
     skillUses: { ...state.skillUses },
+    skillAdGranted: { ...state.skillAdGranted },
     undoStack: state.undoStack.map((s) => ({
       ...s,
       columns: cloneColumns(s.columns),
@@ -72,7 +73,7 @@ export function createEmptySkillUses(): Record<import('./types.js').SkillType, n
     takeToHold: 0,
     undo: 0,
     peek: 0,
-    extraSlot: 0,
+    collect: 0,
   };
 }
 

@@ -1,5 +1,6 @@
 import {
   GameController,
+  SKILL_INFO,
   SUIT_COUNT,
   formatDailyDate,
   getEndlessBestLevel,
@@ -144,7 +145,11 @@ function startTimer() {
 
 function handleGameEvent(event) {
   if (event.type === 'lost') {
-    setTimeout(() => showModal('revive'), 300);
+    if (controller && controller.canRevive()) {
+      setTimeout(() => showModal('revive'), 300);
+    } else {
+      setTimeout(() => showResult(false), 300);
+    }
   }
   if (event.type === 'won') {
     setTimeout(() => showResult(true), 500);
@@ -162,6 +167,7 @@ function renderGame() {
 
   const columnsEl = $('#columns');
   columnsEl.innerHTML = '';
+
   state.columns.forEach((col, colIdx) => {
     const colEl = document.createElement('div');
     colEl.className = 'column';

@@ -12,7 +12,7 @@ export const SKILL_INFO: Record<SkillType, SkillInfo> = {
   [SkillType.Shuffle]: {
     type: SkillType.Shuffle,
     name: '打乱',
-    description: '全部剩余牌重新随机分配到5列',
+    description: '全部剩余牌重新随机分配到列',
     icon: '🔀',
   },
   [SkillType.TakeToHold]: {
@@ -33,11 +33,11 @@ export const SKILL_INFO: Record<SkillType, SkillInfo> = {
     description: '每列额外展示接下来2张牌（10秒）',
     icon: '👁️',
   },
-  [SkillType.ExtraSlot]: {
-    type: SkillType.ExtraSlot,
-    name: '额外槽位',
-    description: '临时8槽，持续30秒',
-    icon: '➕',
+  [SkillType.Collect]: {
+    type: SkillType.Collect,
+    name: '凑齐',
+    description: '从现有牌中凑齐3张同花色消除',
+    icon: '🎯',
   },
 };
 
@@ -56,7 +56,7 @@ export class SkillManager {
       takeToHold: 99,
       undo: 3,
       peek: 99,
-      extraSlot: 99,
+      collect: 99,
     };
     return uses < limits[skill];
   }
